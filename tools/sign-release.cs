@@ -17,7 +17,23 @@ if (string.IsNullOrWhiteSpace(keyBase64))
     return 1;
 }
 
-var privateKey = Convert.FromBase64String(keyBase64.Trim());
+// 登録のしかたによっては先頭に BOM などの見えない文字が付くので、Base64 に使う文字だけを残す
+var cleaned = new string(keyBase64.Where(c => char.IsAsciiLetterOrDigit(c) || c is '+' or '/' or '=').ToArray());
+byte[] privateKey;
+try
+{
+    privateKey = Convert.FromBase64String(cleaned);
+}
+catch (FormatException)
+{
+    Console.Error.WriteLine("RELEASE_SIGNING_KEY が Base64 として読めません。");
+    return 1;
+}
+if (privateKey.Length != 32)
+{
+    Console.Error.WriteLine($"RELEASE_SIGNING_KEY の長さが違います（{privateKey.Length} バイト。32 バイトのはず）。");
+    return 1;
+}
 var version = args[0].TrimStart('v');
 foreach (var path in args[1..])
 {

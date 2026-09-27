@@ -13,7 +13,7 @@ namespace PwVault.Core.Updates;
 public static class ReleaseSignature
 {
     /// <summary>リリースの署名を確かめる公開鍵（Ed25519・32 バイト・Base64）。</summary>
-    public const string PublicKeyBase64 = "jOTRa9XATdoYXk7m00fB7vNd+VhlX3yGHWP6nhDZ/vY=";
+    public const string PublicKeyBase64 = "Iq66c5xeec4O6WpsUIHDT+567GJIIcLxYoVFoOmMmPo=";
 
     private static SignatureAlgorithm Alg => SignatureAlgorithm.Ed25519;
 
