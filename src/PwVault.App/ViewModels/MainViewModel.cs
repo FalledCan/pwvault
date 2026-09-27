@@ -5,6 +5,7 @@ using PwVault.App.Bridge;
 using PwVault.App.Services;
 using PwVault.Core;
 using PwVault.Core.Bridge;
+using PwVault.Core.QuickUnlock;
 
 namespace PwVault.App.ViewModels;
 
@@ -42,8 +43,12 @@ public partial class MainViewModel : ViewModelBase
 
     public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs,
         BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
-        UpdateService? updates = null)
+        UpdateService? updates = null,
+        IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null)
     {
+        QuickUnlock = quickUnlock ?? QuickUnlockProviders.CreateDefault();
+        LocalDataDir = localDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PwVault");
+        Clock = clock ?? TimeProvider.System;
         IconFetcher = iconFetcher ?? new FaviconFetcher();
         Updates = updates ?? new UpdateService();
         SettingsStore = store;
@@ -62,6 +67,69 @@ public partial class MainViewModel : ViewModelBase
 
         if (Settings.BrowserIntegration)
             ResumeBrowserIntegration();
+    }
+
+    // ------------------------------------------------------------------ Windows Hello（クイックアンロック）
+
+    public IQuickUnlockProvider? QuickUnlock { get; }
+
+    /// <summary>この端末だけに置くデータ（クイックアンロックの登録など）の場所。</summary>
+    public string LocalDataDir { get; }
+
+    public TimeProvider Clock { get; }
+
+    /// <summary>OS の確認画面の親にするウィンドウ。</summary>
+    public Func<IntPtr> OwnerWindowHandle { get; set; } = () => IntPtr.Zero;
+
+    public string QuickUnlockPath(Guid vaultId) => Path.Combine(LocalDataDir, "QuickUnlock", vaultId.ToString("N") + ".json");
+
+    public bool IsQuickUnlockEnrolled(Guid vaultId) => QuickUnlockService.Load(QuickUnlockPath(vaultId)) is { } r && r.VaultId == vaultId;
+
+    /// <summary>
+    /// Windows Hello を登録する。マスターパスワードを確かめてから、OS の確認（顔・指紋・PIN）を経て鍵を作る。
+    /// 失敗したら理由を返す。
+    /// </summary>
+    public async Task<string?> EnableQuickUnlockAsync(Vault vault, string masterPassword)
+    {
+        if (QuickUnlock is null || !await QuickUnlock.IsAvailableAsync())
+            return "この PC では Windows Hello を使えません（Windows の設定で顔認証・指紋・PIN を設定してください）。";
+        if (!await Task.Run(() => vault.VerifyPassword(masterPassword)))
+            return "マスターパスワードが違います。";
+
+        var challenge = QuickUnlockService.NewChallenge();
+        var signature = await QuickUnlock.SignAsync(vault.VaultId, challenge, create: true, OwnerWindowHandle());
+        if (signature is null)
+            return $"{QuickUnlock.Name} での確認が取り消されました。";
+
+        try
+        {
+            var record = QuickUnlockService.Enroll(vault, challenge, signature, Clock.GetUtcNow().AddDays(Settings.QuickUnlockDays));
+            QuickUnlockService.Save(QuickUnlockPath(vault.VaultId), record);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return "登録を保存できませんでした。";
+        }
+    }
+
+    public async Task DisableQuickUnlockAsync(Guid vaultId)
+    {
+        try { File.Delete(QuickUnlockPath(vaultId)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        if (QuickUnlock is not null) await QuickUnlock.DeleteAsync(vaultId);
+    }
+
+    /// <summary>マスターパスワードでアンロックしたら、Windows Hello の期限を延ばす（OS の確認は不要）。</summary>
+    private void RefreshQuickUnlockExpiry(Vault vault)
+    {
+        var path = QuickUnlockPath(vault.VaultId);
+        if (QuickUnlockService.Load(path) is not { } record || record.VaultId != vault.VaultId) return;
+        try
+        {
+            QuickUnlockService.Save(path, QuickUnlockService.RefreshExpiry(vault, record, Clock.GetUtcNow().AddDays(Settings.QuickUnlockDays)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     // ------------------------------------------------------------------ 更新
@@ -245,8 +313,10 @@ public partial class MainViewModel : ViewModelBase
         CurrentPage = new UnlockViewModel(this, path);
     }
 
-    public void OnUnlocked(Vault vault)
+    /// <param name="viaMasterPassword">マスターパスワードで開いたか（Windows Hello の期限を延ばすのはこのときだけ）。</param>
+    public void OnUnlocked(Vault vault, bool viaMasterPassword = true)
     {
+        if (viaMasterPassword) RefreshQuickUnlockExpiry(vault);
         Settings.VaultPath = vault.FilePath;
         SaveSettings();
         AutoLock.NotifyActivity();

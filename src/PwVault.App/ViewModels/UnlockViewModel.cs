@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PwVault.Core;
+using PwVault.Core.QuickUnlock;
 using PwVault.Core.Storage;
 
 namespace PwVault.App.ViewModels;
@@ -20,9 +21,71 @@ public partial class UnlockViewModel : ViewModelBase
     {
         _main = main;
         VaultPath = vaultPath;
+        QuickUnlockReady = InitQuickUnlockAsync();
     }
 
     public string VaultPath { get; }
+
+    // ------------------------------------------------------------------ Windows Hello
+
+    private QuickUnlockRecord? _quickRecord;
+
+    /// <summary>Windows Hello でアンロックできるか（登録済みで、この PC で使える）。</summary>
+    [ObservableProperty]
+    public partial bool CanQuickUnlock { get; set; }
+
+    public string QuickUnlockLabel => $"{_main.QuickUnlock?.Name ?? "生体認証"} でアンロック";
+
+    /// <summary>使えるかどうかの確認が終わったら完了する（View が自動で確認画面を出すのに使う）。</summary>
+    public Task QuickUnlockReady { get; }
+
+    private async Task InitQuickUnlockAsync()
+    {
+        if (_main.QuickUnlock is not { } provider) return;
+        try
+        {
+            // 保管庫 ID はヘッダ（平文）から読める。パスワードは不要
+            var vaultId = Core.Format.VaultFileCodec.Deserialize(await File.ReadAllBytesAsync(VaultPath)).Header.VaultId;
+            _quickRecord = QuickUnlockService.Load(_main.QuickUnlockPath(vaultId));
+            CanQuickUnlock = _quickRecord?.VaultId == vaultId && await provider.IsAvailableAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException)
+        {
+            CanQuickUnlock = false; // 読めない保管庫はマスターパスワードでのアンロック時に案内する
+        }
+    }
+
+    [RelayCommand]
+    private async Task QuickUnlockAsync()
+    {
+        if (IsBusy || !CanQuickUnlock || _quickRecord is not { } record || _main.QuickUnlock is not { } provider) return;
+        Error = Info = null;
+        IsBusy = true;
+        try
+        {
+            var signature = await provider.SignAsync(record.VaultId, record.Challenge, create: false, _main.OwnerWindowHandle());
+            if (signature is null)
+            {
+                Info = $"{provider.Name} での確認が取り消されました。マスターパスワードでもアンロックできます。";
+                return;
+            }
+            var now = _main.Clock.GetUtcNow();
+            var vault = await Task.Run(() => QuickUnlockService.Unlock(VaultPath, record, signature, now));
+            Password = "";
+            _main.OnUnlocked(vault, viaMasterPassword: false);
+        }
+        catch (VaultException ex)
+        {
+            Error = ex.Message;
+            if (ex.Kind == VaultErrorKind.QuickUnlockUnavailable)
+                CanQuickUnlock = false;
+            FocusPasswordRequested?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     [ObservableProperty]
     public partial string Password { get; set; } = "";

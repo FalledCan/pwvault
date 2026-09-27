@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using PwVault.App;
 using PwVault.App.Services;
+using PwVault.Core.QuickUnlock;
 using PwVault.App.ViewModels;
 using PwVault.App.Views;
 
@@ -56,6 +57,44 @@ public sealed class FakeIconServer : HttpMessageHandler
     }
 }
 
+/// <summary>
+/// Windows Hello の代わり。保管庫ごとの「端末の秘密」で challenge に決まった値を返す（同じ入力なら同じ出力）。
+/// create のたびに秘密を作り直すのは、本物が鍵を作り直すのと同じ。
+/// </summary>
+public sealed class FakeHello : IQuickUnlockProvider
+{
+    private readonly Dictionary<Guid, byte[]> _keys = [];
+
+    public bool Available { get; set; } = true;
+    public bool UserCancels { get; set; }
+    public int Prompts { get; private set; }
+    public string Name => "Windows Hello";
+
+    public Task<bool> IsAvailableAsync() => Task.FromResult(Available);
+
+    public Task<byte[]?> SignAsync(Guid vaultId, byte[] challenge, bool create, IntPtr ownerWindow)
+    {
+        Prompts++;
+        if (UserCancels) return Task.FromResult<byte[]?>(null);
+        if (create) _keys[vaultId] = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        if (!_keys.TryGetValue(vaultId, out var key)) return Task.FromResult<byte[]?>(null);
+        var sig = System.Security.Cryptography.HMACSHA512.HashData(key, challenge).Concat(new byte[192]).ToArray();
+        return Task.FromResult<byte[]?>(sig);
+    }
+
+    public Task DeleteAsync(Guid vaultId)
+    {
+        _keys.Remove(vaultId);
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class MutableClock : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+    public override DateTimeOffset GetUtcNow() => Now;
+}
+
 /// <summary>一時ディレクトリ上で MainWindow と MainViewModel を組み立てる。</summary>
 public sealed class Harness : IDisposable
 {
@@ -72,6 +111,12 @@ public sealed class Harness : IDisposable
 
     /// <summary>「ブラウザで開く」が呼ばれた URL。</summary>
     public List<Uri> OpenedUrls { get; } = [];
+
+    /// <summary>Windows Hello の代わり。</summary>
+    public FakeHello Hello { get; } = new();
+
+    /// <summary>進められる時計。</summary>
+    public MutableClock Clock { get; } = new();
 
     /// <summary>テスト用のパイプ名（本物の PwVault と衝突しないように毎回変える）。</summary>
     public string PipeName { get; } = "PwVault.Test." + Guid.NewGuid().ToString("N");
@@ -95,7 +140,7 @@ public sealed class Harness : IDisposable
         Window = new MainWindow { Width = 1100, Height = 720 };
         // テストでは通信しない（アイコンは Icons に積んだものだけ返す）・ブラウザも開かない
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
-            new FaviconFetcher(Icons), new UpdateService(Icons));
+            new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock);
         Main.OpenInBrowser = OpenedUrls.Add;
         Window.DataContext = Main;
         Window.Show();

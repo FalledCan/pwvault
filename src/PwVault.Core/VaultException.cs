@@ -15,6 +15,8 @@ public enum VaultErrorKind
     UnsupportedVersion,
     /// <summary>ファイル入出力の失敗。</summary>
     Io,
+    /// <summary>Windows Hello などのクイックアンロックが使えない（期限切れ・マスターパスワード変更後など）。</summary>
+    QuickUnlockUnavailable,
 }
 
 /// <summary>

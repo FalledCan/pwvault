@@ -29,6 +29,8 @@ public partial class SettingsViewModel : ViewModelBase
         DoubleClickOpensUrl = s.DoubleClickOpensUrl;
         CloseToTray = s.CloseToTray;
         CheckForUpdates = s.CheckForUpdates;
+        QuickUnlockDays = s.QuickUnlockDays;
+        QuickUnlockEnabled = owner.Main.IsQuickUnlockEnrolled(owner.Vault.VaultId);
         _loaded = true;
     }
 
@@ -65,6 +67,58 @@ public partial class SettingsViewModel : ViewModelBase
         if (!_loaded) return;
         _owner.Main.Settings.CloseToTray = value;
         _owner.Main.SaveSettings();
+    }
+
+    // ---- Windows Hello
+    public bool QuickUnlockSupported => _owner.Main.QuickUnlock is not null;
+    public string QuickUnlockName => _owner.Main.QuickUnlock?.Name ?? "Windows Hello";
+    [ObservableProperty] public partial bool QuickUnlockEnabled { get; set; }
+    [ObservableProperty] public partial string QuickUnlockPassword { get; set; } = "";
+    [ObservableProperty] public partial string? QuickUnlockStatus { get; set; }
+    [ObservableProperty] public partial bool QuickUnlockBusy { get; set; }
+    [ObservableProperty] public partial decimal? QuickUnlockDays { get; set; }
+
+    partial void OnQuickUnlockDaysChanged(decimal? value)
+    {
+        if (!_loaded || value is null) return;
+        _owner.Main.Settings.QuickUnlockDays = (int)Math.Clamp(value.Value, 1, 90);
+        _owner.Main.SaveSettings();
+    }
+
+    [RelayCommand]
+    private async Task EnableQuickUnlockAsync()
+    {
+        if (QuickUnlockPassword.Length == 0) { QuickUnlockStatus = "確認のため、マスターパスワードを入力してください。"; return; }
+        QuickUnlockBusy = true;
+        QuickUnlockStatus = $"{QuickUnlockName} の確認画面で認証してください…";
+        try
+        {
+            var error = await _owner.Main.EnableQuickUnlockAsync(_owner.Vault, QuickUnlockPassword);
+            QuickUnlockPassword = "";
+            QuickUnlockEnabled = error is null && _owner.Main.IsQuickUnlockEnrolled(_owner.Vault.VaultId);
+            QuickUnlockStatus = error ?? $"{QuickUnlockName} を有効にしました。次回から {QuickUnlockName} でアンロックできます。";
+        }
+        finally { QuickUnlockBusy = false; }
+    }
+
+    /// <summary>
+    /// マスターパスワードや KDF を変えると保管庫鍵の包み直しで Windows Hello の登録は使えなくなる。
+    /// 残っていても使えないので消し、再登録を案内する。
+    /// </summary>
+    private async Task<string> ClearQuickUnlockAfterRewrapAsync()
+    {
+        if (!QuickUnlockEnabled) return "";
+        await _owner.Main.DisableQuickUnlockAsync(_owner.Vault.VaultId);
+        QuickUnlockEnabled = false;
+        return $"\n{QuickUnlockName} の登録は解除されました。使う場合はもう一度有効にしてください。";
+    }
+
+    [RelayCommand]
+    private async Task DisableQuickUnlockAsync()
+    {
+        await _owner.Main.DisableQuickUnlockAsync(_owner.Vault.VaultId);
+        QuickUnlockEnabled = false;
+        QuickUnlockStatus = $"{QuickUnlockName} を無効にしました。";
     }
 
     // ---- 更新
@@ -172,7 +226,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             await Task.Run(() => _owner.Vault.ChangeMasterPassword(password, password, memKiB, iterations));
             KdfPassword = "";
-            KdfStatus = _owner.Persist() ? "KDF パラメータを更新しました。" : _owner.Status;
+            KdfStatus = _owner.Persist() ? "KDF パラメータを更新しました。" + await ClearQuickUnlockAfterRewrapAsync() : _owner.Status;
             UpdateKdfCurrent();
         }
         catch (VaultException ex)
@@ -202,7 +256,7 @@ public partial class SettingsViewModel : ViewModelBase
             await Task.Run(() => _owner.Vault.ChangeMasterPassword(current, next));
             CurrentPassword = NewPassword = ConfirmNewPassword = "";
             PasswordStatus = _owner.Persist()
-                ? "マスターパスワードを変更しました。緊急キットの記入内容も更新してください。"
+                ? "マスターパスワードを変更しました。緊急キットの記入内容も更新してください。" + await ClearQuickUnlockAfterRewrapAsync()
                 : _owner.Status;
             UpdateKdfCurrent();
         }

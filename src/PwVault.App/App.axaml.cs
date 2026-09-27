@@ -26,6 +26,7 @@ public partial class App : Application
             var main = new MainViewModel(new AppSettingsStore(), clipboard, new AutoLockService(), window);
             window.DataContext = main;
             desktop.MainWindow = window;
+            main.OwnerWindowHandle = () => window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
 
             // 更新: 前回の入れ替えで残った古い exe を消し、定期的な確認を始める。入れ替えたら終了して新しい exe に任せる
             UpdateService.CleanupAfterUpdate(MainViewModel.ExePath);

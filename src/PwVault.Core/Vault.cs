@@ -97,7 +97,54 @@ public sealed class Vault : IDisposable
     {
         var vaultKey = UnwrapVaultKey(doc.Header, masterPassword)
             ?? throw new VaultException(VaultErrorKind.WrongPassword, "マスターパスワードが違います。");
+        return OpenWithKey(path, doc, vaultKey, clock);
+    }
 
+    // ------------------------------------------------------------------ クイックアンロック（Windows Hello など）
+
+    /// <summary>
+    /// マスターパスワード以外の鍵（Windows Hello から導出した鍵など）で保管庫鍵を包む。
+    /// AAD に「現在のマスターパスワードで包んだ保管庫鍵」の指紋を入れるので、マスターパスワードを変えると自動的に無効になる。
+    /// </summary>
+    public SealedBox SealVaultKeyWith(ReadOnlySpan<byte> wrappingKey, string context)
+    {
+        EnsureUnlocked();
+        using var key = Key.Import(KeyHierarchy.Aead, wrappingKey, KeyBlobFormat.RawSymmetricKey);
+        using var raw = SecretBuffer.Allocate(_vaultKey!.GetExportBlobSize(KeyBlobFormat.RawSymmetricKey));
+        if (!_vaultKey.TryExport(KeyBlobFormat.RawSymmetricKey, raw.Span, out _))
+            throw new InvalidOperationException("保管庫鍵を取り出せませんでした。");
+        return AeadBox.Seal(key, QuickUnlockAad(_header, context), raw.Span);
+    }
+
+    /// <summary><see cref="SealVaultKeyWith"/> で包んだ保管庫鍵を使ってアンロックする。鍵が違う・マスターパスワード変更後なら例外。</summary>
+    public static Vault OpenWithWrappedKey(string path, ReadOnlySpan<byte> wrappingKey, string context, SealedBox wrappedVaultKey,
+        TimeProvider? clock = null)
+    {
+        byte[] bytes;
+        try { bytes = File.ReadAllBytes(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new VaultException(VaultErrorKind.Io, "保管庫ファイルを読み込めませんでした。", ex);
+        }
+        var doc = VaultFileCodec.Deserialize(bytes);
+
+        using var key = Key.Import(KeyHierarchy.Aead, wrappingKey, KeyBlobFormat.RawSymmetricKey);
+        using var raw = AeadBox.Open(key, QuickUnlockAad(doc.Header, context), wrappedVaultKey)
+            ?? throw new VaultException(VaultErrorKind.QuickUnlockUnavailable,
+                "登録が無効になっています（マスターパスワードの変更など）。マスターパスワードでアンロックしてください。");
+        return OpenWithKey(path, doc, KeyHierarchy.ImportVaultKey(raw.Span), clock);
+    }
+
+    private static byte[] QuickUnlockAad(VaultHeader header, string context) =>
+        new AadBuilder()
+            .String("pwvault/quick-unlock")
+            .String(context)
+            .Guid(header.VaultId)
+            .Bytes(System.Security.Cryptography.SHA256.HashData(header.WrappedVaultKey.Ciphertext))
+            .ToArray();
+
+    private static Vault OpenWithKey(string path, VaultDocument doc, Key vaultKey, TimeProvider? clock)
+    {
         try
         {
             var plain = new Dictionary<Guid, EntryData>();

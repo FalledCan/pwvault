@@ -65,6 +65,18 @@ public class AppShellTests
         Assert.True(withWait);
     }
 
+#if WINDOWS
+    [AvaloniaFact]
+    public async Task WindowsHello_AvailabilityCheck_Works()
+    {
+        // 「使えるか」の確認は確認画面を出さない。例外にならず、どちらかの答えが返ること
+        var provider = QuickUnlockProviders.CreateDefault();
+        Assert.IsType<WindowsHelloProvider>(provider);
+        var available = await provider.IsAvailableAsync();
+        TestContext.Current.TestOutputHelper?.WriteLine($"Windows Hello available: {available}");
+    }
+#endif
+
     [AvaloniaFact]
     public void TrayIconAsset_Loads()
     {

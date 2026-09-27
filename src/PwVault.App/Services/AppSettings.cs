@@ -35,6 +35,9 @@ public sealed class AppSettings
     /// <summary>起動時と 1 日 1 回、GitHub の最新リリースを確認するか。</summary>
     public bool CheckForUpdates { get; set; } = true;
 
+    /// <summary>Windows Hello でのアンロックを、マスターパスワードなしで続けられる日数。過ぎたらマスターパスワードが必要。</summary>
+    public int QuickUnlockDays { get; set; } = 14;
+
     public static string DefaultVaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
 }
@@ -81,6 +84,7 @@ public sealed class AppSettingsStore
         s.ClipboardClearSeconds = Math.Clamp(s.ClipboardClearSeconds, 5, 600);
         s.BackupGenerations = Math.Clamp(s.BackupGenerations, 0, Core.Storage.AtomicFileStore.MaxBackupGenerations);
         s.Generator ??= new GeneratorOptions();
+        s.QuickUnlockDays = Math.Clamp(s.QuickUnlockDays, 1, 90);
         return s;
     }
 }
