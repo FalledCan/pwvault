@@ -9,7 +9,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>PwVault</AssemblyName>
     <Version>0.3.0</Version>
-    <ApplicationIcon>Assets\pwvault.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- 発行時は事前コンパイルして初回起動を速くする（NFR-04） -->

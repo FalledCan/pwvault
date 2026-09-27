@@ -58,7 +58,7 @@ public partial class App : Application
 
         var tray = new TrayIcon
         {
-            Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://PwVault/Assets/pwvault.ico"))),
+            Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://PwVault/Assets/avalonia-logo.ico"))),
             ToolTipText = "PwVault",
             Menu = [open, lockItem, new NativeMenuItemSeparator(), exit],
         };

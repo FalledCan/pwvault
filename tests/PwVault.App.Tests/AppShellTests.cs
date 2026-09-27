@@ -38,7 +38,7 @@ public class AppShellTests
     public void TrayIconAsset_Loads()
     {
         // 起動時に通知領域のアイコンを作るのに使う資源が、exe の中から読めること
-        using var stream = AssetLoader.Open(new Uri("avares://PwVault/Assets/pwvault.ico"));
+        using var stream = AssetLoader.Open(new Uri("avares://PwVault/Assets/avalonia-logo.ico"));
         var icon = new WindowIcon(stream);
         Assert.NotNull(icon);
     }
