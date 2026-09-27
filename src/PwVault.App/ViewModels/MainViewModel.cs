@@ -1,7 +1,10 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PwVault.App.Bridge;
 using PwVault.App.Services;
 using PwVault.Core;
+using PwVault.Core.Bridge;
 
 namespace PwVault.App.ViewModels;
 
@@ -37,7 +40,8 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial ConfirmRequest? Confirm { get; set; }
 
-    public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs)
+    public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs,
+        BrowserIntegration? browserIntegration = null, string? bridgePipeName = null)
     {
         SettingsStore = store;
         Settings = store.Load();
@@ -46,11 +50,72 @@ public partial class MainViewModel : ViewModelBase
         FileDialogs = fileDialogs;
         AutoLock.IdleMinutes = Settings.AutoLockMinutes;
         AutoLock.LockRequested += (_, _) => Lock();
+        BrowserIntegration = browserIntegration ?? (OperatingSystem.IsWindows() ? new BrowserIntegration() : null);
+        _bridgePipeName = bridgePipeName;
 
         CurrentPage = Settings.VaultPath is { } path && File.Exists(path)
             ? new UnlockViewModel(this, path)
             : new SetupViewModel(this);
+
+        if (Settings.BrowserIntegration)
+            ResumeBrowserIntegration();
     }
+
+    // ------------------------------------------------------------------ ブラウザ連携
+
+    private readonly string? _bridgePipeName;
+    private BridgeServer? _bridge;
+
+    public BrowserIntegration? BrowserIntegration { get; }
+
+    public bool IsBridgeRunning => _bridge is not null;
+
+    /// <summary>ブラウザ連携を有効にする: レジストリ登録・拡張機能の展開・窓口の起動。</summary>
+    public void EnableBrowserIntegration()
+    {
+        if (BrowserIntegration is null || !OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("ブラウザ連携は Windows 専用です。");
+
+        BrowserIntegration.Register(ExePath);
+        Settings.BrowserIntegration = true;
+        SaveSettings();
+        StartBridge();
+    }
+
+    public void DisableBrowserIntegration()
+    {
+        StopBridge();
+        if (OperatingSystem.IsWindows())
+            BrowserIntegration?.Unregister();
+        Settings.BrowserIntegration = false;
+        SaveSettings();
+    }
+
+    private void ResumeBrowserIntegration()
+    {
+        // exe を移動していたら登録し直す（ブラウザが古い場所の exe を起動しようとして失敗しないように）
+        if (OperatingSystem.IsWindows() && BrowserIntegration?.GetStatus(ExePath) != IntegrationStatus.Registered)
+        {
+            try { BrowserIntegration?.Register(ExePath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        StartBridge();
+    }
+
+    public static string ExePath => Environment.ProcessPath ?? throw new InvalidOperationException("実行ファイルの場所が分かりません。");
+
+    private void StartBridge() => _bridge ??= new BridgeServer(HandleBridgeRequestAsync, _bridgePipeName);
+
+    private void StopBridge()
+    {
+        _bridge?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
+        _bridge = null;
+    }
+
+    /// <summary>保管庫は UI スレッドでしか触らないので、要求の処理は UI スレッドで行う。ロック中は null を渡して「ロック中」と答える。</summary>
+    internal Task<BridgeResponse> HandleBridgeRequestAsync(BridgeRequest? request) =>
+        Dispatcher.UIThread.InvokeAsync(() =>
+            BridgeHandler.Handle(request, CurrentPage is VaultViewModel { IsUnlocked: true } vault ? vault.Vault.GetEntries() : null)).GetTask();
 
     public void SaveSettings()
     {
@@ -97,6 +162,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>アプリ終了時の後始末。</summary>
     public void Shutdown()
     {
+        StopBridge();
         Lock();
         Clipboard.Dispose();
         AutoLock.Dispose();

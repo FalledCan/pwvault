@@ -31,6 +31,49 @@
                 </StackPanel>
             </Border>
 
+            <!-- ブラウザ連携 -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="ブラウザ連携（右クリックで自動入力）" />
+                    <TextBlock Classes="muted" FontSize="13"
+                               Text="Chrome・Edge・Firefox の入力欄を右クリックすると「PwVault」メニューに表示中のサイトのエントリが並び、選ぶとユーザーIDとパスワードを入力します。PwVault がアンロックされている間だけ使えます。通信は PC 内だけで行います。" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="状態:" />
+                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding BrowserStatus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="accent" Content="有効にする" IsVisible="{Binding !BrowserEnabled}"
+                                IsEnabled="{Binding BrowserSupported}" Command="{Binding EnableBrowserCommand}" />
+                        <Button Content="無効にする" IsVisible="{Binding BrowserEnabled}" Command="{Binding DisableBrowserCommand}" />
+                    </StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="{Binding BrowserMessage}"
+                               IsVisible="{Binding BrowserMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <StackPanel Spacing="10" IsVisible="{Binding BrowserEnabled}">
+                        <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="6">
+                                <TextBlock FontWeight="SemiBold" Text="Chrome / Edge に拡張機能を入れる" />
+                                <TextBlock Classes="muted" FontSize="13" Text="1. アドレスバーに chrome://extensions（Edge は edge://extensions）と入力して開く&#x0a;2. 「デベロッパー モード」をオンにする&#x0a;3. 「パッケージ化されていない拡張機能を読み込む」で、次のフォルダを選ぶ" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <SelectableTextBlock FontSize="12" VerticalAlignment="Center" Text="{Binding ChromiumExtensionDir}" TextWrapping="Wrap" />
+                                    <Button Grid.Column="1" Content="フォルダを開く" Command="{Binding OpenChromiumFolderCommand}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="6">
+                                <TextBlock FontWeight="SemiBold" Text="Firefox に拡張機能を入れる" />
+                                <TextBlock Classes="muted" FontSize="13" Text="1. アドレスバーに about:debugging#/runtime/this-firefox と入力して開く&#x0a;2. 「一時的なアドオンを読み込む」で、次のフォルダの manifest.json を選ぶ&#x0a;※ 署名していないため、Firefox を再起動すると外れます（毎回読み込み直しが必要）" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <SelectableTextBlock FontSize="12" VerticalAlignment="Center" Text="{Binding FirefoxExtensionDir}" TextWrapping="Wrap" />
+                                    <Button Grid.Column="1" Content="フォルダを開く" Command="{Binding OpenFirefoxFolderCommand}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- マスターパスワード変更 -->
             <Border Classes="card">
                 <StackPanel Spacing="12">

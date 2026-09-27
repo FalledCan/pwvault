@@ -57,6 +57,8 @@ public partial class VaultViewModel : ViewModelBase
     public MainViewModel Main { get; }
     public Vault Vault => _vault ?? throw new InvalidOperationException("保管庫はロックされています。");
 
+    public bool IsUnlocked => _vault is { IsLocked: false };
+
     public ObservableCollection<EntryItemViewModel> Items { get; } = [];
     public ObservableCollection<FilterOption> Filters { get; } = [];
 

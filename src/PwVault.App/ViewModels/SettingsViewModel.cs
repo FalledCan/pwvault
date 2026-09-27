@@ -24,6 +24,7 @@ public partial class SettingsViewModel : ViewModelBase
         MemoryMiB = owner.Vault.Kdf.MemoryKiB / 1024;
         Iterations = owner.Vault.Kdf.Iterations;
         UpdateKdfCurrent();
+        UpdateBrowserStatus();
     }
 
     public string VaultPath => _owner.Vault.FilePath;
@@ -165,6 +166,70 @@ public partial class SettingsViewModel : ViewModelBase
             PasswordStatus = ex.Message;
         }
         finally { PasswordBusy = false; }
+    }
+
+    // ---- ブラウザ連携
+
+    [ObservableProperty] public partial string BrowserStatus { get; set; } = "";
+    [ObservableProperty] public partial bool BrowserEnabled { get; set; }
+    [ObservableProperty] public partial string? BrowserMessage { get; set; }
+
+    public bool BrowserSupported => _owner.Main.BrowserIntegration is not null;
+    public string ChromiumExtensionDir => _owner.Main.BrowserIntegration?.ChromiumExtensionDir ?? "";
+    public string FirefoxExtensionDir => _owner.Main.BrowserIntegration?.FirefoxExtensionDir ?? "";
+
+    private void UpdateBrowserStatus()
+    {
+        BrowserEnabled = _owner.Main.Settings.BrowserIntegration;
+        BrowserStatus = !BrowserSupported ? "この OS では使えません"
+            : BrowserEnabled ? "有効（Chrome・Edge・Firefox に登録済み）"
+            : "無効";
+    }
+
+    [RelayCommand]
+    private void EnableBrowser()
+    {
+        try
+        {
+            _owner.Main.EnableBrowserIntegration();
+            BrowserMessage = "有効にしました。下の手順で、各ブラウザに拡張機能を読み込んでください。";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or System.Security.SecurityException)
+        {
+            BrowserMessage = "有効にできませんでした: " + ex.Message;
+        }
+        UpdateBrowserStatus();
+    }
+
+    [RelayCommand]
+    private void DisableBrowser()
+    {
+        try
+        {
+            _owner.Main.DisableBrowserIntegration();
+            BrowserMessage = "無効にしました。各ブラウザの拡張機能も不要なら削除してください。";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            BrowserMessage = "無効にできませんでした: " + ex.Message;
+        }
+        UpdateBrowserStatus();
+    }
+
+    [RelayCommand]
+    private void OpenChromiumFolder() => OpenFolder(ChromiumExtensionDir);
+
+    [RelayCommand]
+    private void OpenFirefoxFolder() => OpenFolder(FirefoxExtensionDir);
+
+    private void OpenFolder(string dir)
+    {
+        if (!Directory.Exists(dir))
+        {
+            BrowserMessage = "先に「有効にする」を押してください。";
+            return;
+        }
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true });
     }
 
     [RelayCommand]

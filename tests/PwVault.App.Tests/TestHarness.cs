@@ -42,8 +42,16 @@ public sealed class Harness : IDisposable
 
     public string VaultPath => Path.Combine(Dir, "vault.pwv");
 
+    /// <summary>テスト用のパイプ名（本物の PwVault と衝突しないように毎回変える）。</summary>
+    public string PipeName { get; } = "PwVault.Test." + Guid.NewGuid().ToString("N");
+
+    /// <summary>レジストリはテスト用のキー、ファイルは一時フォルダに書く。</summary>
+    public PwVault.App.Bridge.BrowserIntegration Integration { get; }
+    public string RegistryBase { get; } = @"Software\PwVaultTest\" + Guid.NewGuid().ToString("N");
+
     public Harness(Action<AppSettings>? configure = null)
     {
+        Integration = new PwVault.App.Bridge.BrowserIntegration(Path.Combine(Dir, "localappdata"), RegistryBase);
         Directory.CreateDirectory(Dir);
         var store = new AppSettingsStore(Path.Combine(Dir, "settings.json"));
         if (configure is not null)
@@ -54,7 +62,7 @@ public sealed class Harness : IDisposable
         }
 
         Window = new MainWindow { Width = 1100, Height = 720 };
-        Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs);
+        Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName);
         Window.DataContext = Main;
         Window.Show();
         Pump();
@@ -94,7 +102,14 @@ public sealed class Harness : IDisposable
 
     public void Dispose()
     {
-        Main.Lock();
+        Main.Shutdown();
+        if (OperatingSystem.IsWindows())
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegistryBase, throwOnMissingSubKey: false);
+            using (var parent = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\PwVaultTest"))
+                if (parent is { SubKeyCount: 0 })
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(@"Software\PwVaultTest", throwOnMissingSubKey: false);
+        }
         Window.Close();
         AutoLock.Dispose();
         try { Directory.Delete(Dir, recursive: true); } catch (IOException) { }

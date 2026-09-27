@@ -22,6 +22,19 @@
 | 暗号化バックアップ、平文 CSV（警告＋再認証） | FR-11, SR-12 |
 | CSV インポート（Chrome / Edge / Firefox、Bitwarden、KeePassXC） | FR-12 |
 | 弱いパスワード・使い回しの検出、パスワード変更履歴 | FR-14, 15 |
+| ブラウザの入力欄を右クリック →「PwVault」からエントリを選んで ID・パスワードを入力（Chrome / Edge / Firefox） | フェーズ2 から前倒し |
+
+## ブラウザ連携（右クリックで自動入力）
+
+1. PwVault の「設定」→「ブラウザ連携」で **有効にする** を押す（ブラウザへの登録と拡張機能の展開を行います）
+2. 拡張機能を読み込む（設定画面の「フォルダを開く」で場所が分かります）
+   - **Chrome / Edge**: `chrome://extensions`（`edge://extensions`）→「デベロッパー モード」をオン →「パッケージ化されていない拡張機能を読み込む」→ `%LOCALAPPDATA%\PwVault\BrowserExtension\chromium`
+   - **Firefox**: `about:debugging#/runtime/this-firefox` →「一時的なアドオンを読み込む」→ `%LOCALAPPDATA%\PwVault\BrowserExtension\firefox\manifest.json`（署名なしのため Firefox を再起動すると外れます）
+3. PwVault をアンロックした状態で、ログイン画面の ID 欄かパスワード欄を右クリック →「PwVault」→ エントリを選ぶ
+
+- 候補は、表示中のページの URL と保存した URL を照合して出します（`example.com` で保存 → `login.example.com` でも出る。似せたドメインや、https で保存したものを http のページでは出さない）
+- アンロック後に「ロック中」と出るときは、ブラウザのウィンドウをクリックし直すか、メニューの「候補を更新」を選んでください
+- exe を別の場所に移したら、PwVault を 1 度起動すれば登録先が自動で更新されます
 
 ## キーボードショートカット
 
@@ -40,7 +53,8 @@
 
 ```
 src/PwVault.Core     暗号コア（UI 非依存）: 鍵階層・AEAD・ファイル形式・保存・生成・検索・CSV
-src/PwVault.App      Avalonia UI（MVVM）: 画面・自動ロック・クリップボード・設定
+src/PwVault.App      Avalonia UI（MVVM）: 画面・自動ロック・クリップボード・設定・ブラウザ連携の窓口
+browser-extension/   ブラウザ拡張（Chrome/Edge/Firefox 共通。exe に埋め込まれ、有効化時に展開される）
 tests/PwVault.Core.Tests  ユニットテスト・テストベクタ・改ざん検知
 tests/PwVault.App.Tests   ヘッドレス UI テスト（画面遷移を描画して確認）
 ```

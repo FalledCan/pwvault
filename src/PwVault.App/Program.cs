@@ -1,4 +1,5 @@
 using Avalonia;
+using PwVault.App.Bridge;
 
 namespace PwVault.App;
 
@@ -10,6 +11,13 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // ブラウザから中継役として起動された場合は、UI を作らずに 1 往復だけ中継して終わる
+        if (NativeHost.IsNativeMessagingLaunch(args))
+        {
+            return NativeHost.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(),
+                BridgeServer.DefaultPipeName, TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+        }
+
         // 同じ保管庫を 2 つのプロセスで同時に編集して上書きし合わないよう、多重起動を防ぐ
         using var mutex = new Mutex(initiallyOwned: true, @"Local\PwVault.SingleInstance", out var createdNew);
         if (!createdNew)

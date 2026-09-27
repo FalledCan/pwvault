@@ -8,7 +8,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>PwVault</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
   </PropertyGroup>
 
@@ -20,6 +20,13 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
     <InternalsVisibleTo Include="PwVault.App.Tests" />
+  </ItemGroup>
+
+  <!-- ブラウザ拡張を exe に埋め込み、「ブラウザ連携を有効にする」で展開する -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\browser-extension\**\*" Exclude="..\..\browser-extension\README*">
+      <LogicalName>ext/$([System.String]::Copy('%(RecursiveDir)').Replace('\','/'))%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

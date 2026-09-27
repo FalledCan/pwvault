@@ -17,6 +17,9 @@ public sealed class AppSettings
     public EntrySort Sort { get; set; } = EntrySort.Title;
     public GeneratorOptions Generator { get; set; } = new();
 
+    /// <summary>ブラウザ連携（右クリックからの自動入力）を有効にしているか。</summary>
+    public bool BrowserIntegration { get; set; }
+
     public static string DefaultVaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
 }
