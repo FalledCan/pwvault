@@ -1,6 +1,6 @@
 name: Release
 
-# v で始まるタグ（例: v0.1.0）を push すると、テスト → exe のビルド → GitHub リリースへの添付 を行う
+# v で始まるタグ（例: v0.1.0）を push すると、テスト → exe のビルド → 署名 → GitHub リリースへの添付 を行う
 on:
   push:
     tags: ['v*']
@@ -37,10 +37,17 @@ jobs:
           (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() + "  $exe" | Out-File -Encoding ascii "$exe.sha256"
           "EXE=$exe" >> $env:GITHUB_ENV
 
+      # アプリの自動更新は、この署名をアプリに埋め込んだ公開鍵で確かめてから入れ替える
+      - name: Sign
+        shell: pwsh
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: dotnet run tools/sign-release.cs -- '${{ github.ref_name }}' $env:EXE
+
       - name: Create release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' $env:EXE "$env:EXE.sha256" `
+          gh release create '${{ github.ref_name }}' $env:EXE "$env:EXE.sha256" "$env:EXE.sig" `
             --title "PwVault ${{ github.ref_name }}" --generate-notes

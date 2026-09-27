@@ -32,6 +32,9 @@ public sealed class AppSettings
     /// <summary>×ボタンで終了せず、通知領域（タスクトレイ）に隠すか。</summary>
     public bool CloseToTray { get; set; } = true;
 
+    /// <summary>起動時と 1 日 1 回、GitHub の最新リリースを確認するか。</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     public static string DefaultVaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
 }

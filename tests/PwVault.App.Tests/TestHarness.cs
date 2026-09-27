@@ -95,7 +95,7 @@ public sealed class Harness : IDisposable
         Window = new MainWindow { Width = 1100, Height = 720 };
         // テストでは通信しない（アイコンは Icons に積んだものだけ返す）・ブラウザも開かない
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
-            new FaviconFetcher(Icons));
+            new FaviconFetcher(Icons), new UpdateService(Icons));
         Main.OpenInBrowser = OpenedUrls.Add;
         Window.DataContext = Main;
         Window.Show();

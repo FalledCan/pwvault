@@ -17,7 +17,27 @@
     </Window.KeyBindings>
 
     <Panel>
-        <ContentControl Content="{Binding CurrentPage}" />
+        <DockPanel>
+            <!-- 更新の通知 -->
+            <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdate}" Padding="12,8"
+                    Background="{DynamicResource SystemAccentColor}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <TextBlock Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Text="{Binding AvailableUpdate.Version, StringFormat='PwVault v{0} が利用できます'}" />
+                        <TextBlock Foreground="White" VerticalAlignment="Center" Text="{Binding UpdateStatus}" />
+                        <ProgressBar IsVisible="{Binding IsUpdating}" Width="120" Minimum="0" Maximum="1" Value="{Binding UpdateProgress}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                        <Button Content="更新して再起動" IsEnabled="{Binding !IsUpdating}" Command="{Binding InstallUpdateCommand}" />
+                        <Button Content="変更内容" Command="{Binding OpenUpdatePageCommand}" />
+                        <Button Content="あとで" IsEnabled="{Binding !IsUpdating}" Command="{Binding DismissUpdateCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ContentControl Content="{Binding CurrentPage}" />
+        </DockPanel>
 
         <!-- 確認ダイアログ（ウィンドウ内オーバーレイ） -->
         <Panel IsVisible="{Binding Confirm, Converter={x:Static ObjectConverters.IsNotNull}}"

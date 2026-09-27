@@ -28,6 +28,7 @@ public partial class SettingsViewModel : ViewModelBase
         FetchSiteIcons = s.FetchSiteIcons;
         DoubleClickOpensUrl = s.DoubleClickOpensUrl;
         CloseToTray = s.CloseToTray;
+        CheckForUpdates = s.CheckForUpdates;
         _loaded = true;
     }
 
@@ -63,6 +64,18 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (!_loaded) return;
         _owner.Main.Settings.CloseToTray = value;
+        _owner.Main.SaveSettings();
+    }
+
+    // ---- 更新
+    [ObservableProperty] public partial bool CheckForUpdates { get; set; }
+
+    public MainViewModel Main => _owner.Main;
+
+    partial void OnCheckForUpdatesChanged(bool value)
+    {
+        if (!_loaded) return;
+        _owner.Main.Settings.CheckForUpdates = value;
         _owner.Main.SaveSettings();
     }
 

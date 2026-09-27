@@ -41,9 +41,11 @@ public partial class MainViewModel : ViewModelBase
     public partial ConfirmRequest? Confirm { get; set; }
 
     public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs,
-        BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null)
+        BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
+        UpdateService? updates = null)
     {
         IconFetcher = iconFetcher ?? new FaviconFetcher();
+        Updates = updates ?? new UpdateService();
         SettingsStore = store;
         Settings = store.Load();
         Clipboard = clipboard;
@@ -60,6 +62,106 @@ public partial class MainViewModel : ViewModelBase
 
         if (Settings.BrowserIntegration)
             ResumeBrowserIntegration();
+    }
+
+    // ------------------------------------------------------------------ 更新
+
+    public UpdateService Updates { get; }
+
+    public string CurrentVersion => UpdateService.CurrentVersion;
+
+    /// <summary>見つかった新しい版（画面上部に通知を出す）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    public partial UpdateInfo? AvailableUpdate { get; set; }
+
+    public bool HasUpdate => AvailableUpdate is not null;
+
+    [ObservableProperty] public partial string? UpdateStatus { get; set; }
+    [ObservableProperty] public partial bool IsUpdating { get; set; }
+    [ObservableProperty] public partial double UpdateProgress { get; set; }
+
+    /// <summary>更新を入れたので再起動してほしい（App が受けてアプリを終了する）。</summary>
+    public event EventHandler? RestartRequested;
+
+    private DispatcherTimer? _updateTimer;
+
+    /// <summary>設定でオンなら、起動の少し後と 1 日ごとに更新を確認する。</summary>
+    public void StartUpdateChecks()
+    {
+        if (_updateTimer is not null) return;
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(24);
+            if (Settings.CheckForUpdates)
+                await CheckForUpdatesAsync(silent: true);
+        };
+        _updateTimer.Start();
+    }
+
+    [RelayCommand]
+    private Task CheckForUpdatesNow() => CheckForUpdatesAsync(silent: false);
+
+    /// <param name="silent">自動確認のときは、「最新です」や通信エラーを表示しない。</param>
+    public async Task CheckForUpdatesAsync(bool silent)
+    {
+        if (!silent) UpdateStatus = "確認中…";
+        try
+        {
+            AvailableUpdate = await Updates.CheckAsync(CurrentVersion);
+            if (!silent)
+                UpdateStatus = AvailableUpdate is null ? $"最新の版です（v{CurrentVersion}）。" : $"v{AvailableUpdate.Version} が利用できます。";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UpdateException)
+        {
+            if (!silent) UpdateStatus = "更新を確認できませんでした（ネットワークに接続できません）。";
+        }
+    }
+
+    /// <summary>更新をダウンロードし、署名を確かめて入れ替え、再起動する。自動で入れ替えられない OS ではリリースページを開く。</summary>
+    [RelayCommand]
+    private async Task InstallUpdateAsync()
+    {
+        if (AvailableUpdate is not { } update || IsUpdating) return;
+        if (!update.CanInstall || !OperatingSystem.IsWindows())
+        {
+            OpenInBrowser(new Uri(update.PageUrl));
+            return;
+        }
+
+        IsUpdating = true;
+        UpdateStatus = "ダウンロード中…";
+        try
+        {
+            var exe = ExePath;
+            var progress = new Progress<double>(p => UpdateProgress = p);
+            var file = await Updates.DownloadAndVerifyAsync(update, Path.GetDirectoryName(exe)!, progress);
+
+            UpdateStatus = "再起動しています…";
+            Lock(); // 未保存の変更を書き込み、鍵を捨ててから入れ替える
+            UpdateService.ReplaceExecutable(file, exe);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, Program.AfterUpdateArgument) { UseShellExecute = false });
+            RestartRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UpdateException or IOException or UnauthorizedAccessException)
+        {
+            UpdateStatus = ex is UpdateException ? ex.Message : "更新できませんでした: " + ex.Message;
+            IsUpdating = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenUpdatePage()
+    {
+        if (AvailableUpdate is { } update) OpenInBrowser(new Uri(update.PageUrl));
+    }
+
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        AvailableUpdate = null;
+        UpdateStatus = null;
     }
 
     // ------------------------------------------------------------------ ブラウザ連携

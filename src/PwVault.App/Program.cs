@@ -9,6 +9,9 @@ sealed class Program
     /// <summary>多重起動の防止と、2 つ目の起動からの「前に出して」の合図。</summary>
     internal static SingleInstance? Instance { get; private set; }
 
+    /// <summary>更新して再起動したときに新しいプロセスへ渡す引数。</summary>
+    internal const string AfterUpdateArgument = "--after-update";
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -24,7 +27,9 @@ sealed class Program
 
         // 同じ保管庫を 2 つのプロセスで同時に編集して上書きし合わないよう、多重起動を防ぐ。
         // 2 つ目の起動は、通知領域に隠れているかもしれない 1 つ目のウィンドウを前に出して終わる
-        using var instance = new SingleInstance();
+        // 更新して再起動したときは、古いプロセスが終わるのを少し待つ
+        var afterUpdate = args.Contains(AfterUpdateArgument);
+        using var instance = new SingleInstance(afterUpdate ? TimeSpan.FromSeconds(20) : TimeSpan.Zero);
         if (!instance.IsFirstInstance)
         {
             instance.SignalFirstInstance();

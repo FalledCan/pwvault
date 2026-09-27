@@ -49,6 +49,23 @@
                 </StackPanel>
             </Border>
 
+            <!-- 更新 -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="h2" Text="更新" />
+                    <TextBlock Text="{Binding Main.CurrentVersion, StringFormat='現在の版: v{0}'}" />
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding CheckForUpdates}" Content="新しい版を自動で確認する（起動時と 1 日 1 回）" />
+                        <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
+                                   Text="GitHub の最新リリースだけを確認します。更新ファイルは、アプリに埋め込んだ公開鍵で署名を確かめてから入れ替えます。" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="今すぐ確認" Command="{Binding Main.CheckForUpdatesNowCommand}" />
+                        <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Main.UpdateStatus}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- ブラウザ連携 -->
             <Border Classes="card">
                 <StackPanel Spacing="12">

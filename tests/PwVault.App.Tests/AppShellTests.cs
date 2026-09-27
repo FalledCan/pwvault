@@ -34,6 +34,37 @@ public class AppShellTests
         Assert.True(activated.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void AfterUpdate_WaitsForPreviousProcessToExit()
+    {
+        Assert.SkipWhen(System.Diagnostics.Process.GetProcessesByName("PwVault").Length > 0, "PwVault が起動中");
+
+        // 古いプロセス役: 所有したまま 0.5 秒後に手放す
+        using var owned = new ManualResetEventSlim();
+        var old = new Thread(() =>
+        {
+            using var first = new SingleInstance();
+            owned.Set();
+            Thread.Sleep(500);
+        });
+        old.Start();
+        owned.Wait(TestContext.Current.CancellationToken);
+
+        // 新しいプロセス役: 待たなければ 2 つ目扱い、待てば 1 つ目になれる
+        var noWait = true;
+        var t = new Thread(() => { using var s = new SingleInstance(); noWait = s.IsFirstInstance; });
+        t.Start();
+        t.Join();
+        Assert.False(noWait);
+
+        var withWait = false;
+        t = new Thread(() => { using var s = new SingleInstance(TimeSpan.FromSeconds(10)); withWait = s.IsFirstInstance; });
+        t.Start();
+        t.Join();
+        old.Join();
+        Assert.True(withWait);
+    }
+
     [AvaloniaFact]
     public void TrayIconAsset_Loads()
     {

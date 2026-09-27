@@ -11,15 +11,23 @@ public sealed class SingleInstance : IDisposable
 
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _activate;
-    private readonly bool _isFirst;
+    private bool _owned;
 
-    public SingleInstance()
+    /// <param name="waitForPrevious">
+    /// 前のプロセスの終了を待つ時間（更新して再起動するとき、古いプロセスが終わるのを待つ）。0 なら待たない。
+    /// </param>
+    public SingleInstance(TimeSpan waitForPrevious = default)
     {
-        _mutex = new Mutex(initiallyOwned: true, MutexName, out _isFirst);
+        _mutex = new Mutex(initiallyOwned: true, MutexName, out _owned);
+        if (!_owned && waitForPrevious > TimeSpan.Zero)
+        {
+            try { _owned = _mutex.WaitOne(waitForPrevious); }
+            catch (AbandonedMutexException) { _owned = true; } // 前のプロセスが解放せずに終わった
+        }
         _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
     }
 
-    public bool IsFirstInstance => _isFirst;
+    public bool IsFirstInstance => _owned;
 
     /// <summary>先に起動している PwVault に「前に出て」と合図する。</summary>
     public void SignalFirstInstance() => _activate.Set();
@@ -42,7 +50,12 @@ public sealed class SingleInstance : IDisposable
 
     public void Dispose()
     {
-        if (_isFirst) _mutex.ReleaseMutex();
+        if (_owned)
+        {
+            try { _mutex.ReleaseMutex(); }
+            catch (ApplicationException) { } // 別スレッドからの解放など。プロセス終了で解放される
+            _owned = false;
+        }
         _mutex.Dispose();
         _activate.Dispose();
     }

@@ -27,6 +27,15 @@ public partial class App : Application
             window.DataContext = main;
             desktop.MainWindow = window;
 
+            // 更新: 前回の入れ替えで残った古い exe を消し、定期的な確認を始める。入れ替えたら終了して新しい exe に任せる
+            UpdateService.CleanupAfterUpdate(MainViewModel.ExePath);
+            main.StartUpdateChecks();
+            main.RestartRequested += (_, _) =>
+            {
+                window.ForceClose = true;
+                desktop.Shutdown();
+            };
+
             var tray = CreateTrayIcon(desktop, window, main);
 
             // 2 つ目の起動があったら、隠れているウィンドウを前に出す
