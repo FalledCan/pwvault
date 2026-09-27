@@ -24,10 +24,10 @@ public class BridgeTests
 
         // 中継は別スレッドで動かす（UI スレッドで待つと、本体側の UI スレッド処理と行き詰まるため）
         var run = Task.Run(() => NativeHost.RunAsync(stdin, stdout, pipeName, TimeSpan.FromSeconds(2)));
-        var onUiThread = Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
+        // 呼び出し元は UI スレッド（[AvaloniaFact]）。本体側の処理が UI スレッドに投げられるので回し続ける
         while (!run.IsCompleted)
         {
-            if (onUiThread) Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             await Task.Delay(5);
         }
         Assert.Equal(0, await run);
@@ -45,7 +45,7 @@ public class BridgeTests
         Assert.False(NativeHost.IsNativeMessagingLaunch(["--something"]));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task NativeHost_WhenAppNotRunning_ReportsNotRunning()
     {
         var r = await AskViaNativeHost("PwVault.Test.nobody." + Guid.NewGuid().ToString("N"), new BridgeRequest { Type = "status" });
@@ -53,7 +53,7 @@ public class BridgeTests
         Assert.Equal(BridgeResponse.ErrorNotRunning, r.Error);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Server_RejectsUntrustedClient()
     {
         var pipe = "PwVault.Test." + Guid.NewGuid().ToString("N");
@@ -62,7 +62,7 @@ public class BridgeTests
         Assert.Equal(BridgeResponse.ErrorNotRunning, r.Error); // 応答せずに切られる
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Server_Restart_DoesNotLeaveDeadPipe()
     {
         // 止めた窓口の待ち受けパイプが残っていると、そこに繋がった中継が応答待ちで固まる
@@ -76,7 +76,7 @@ public class BridgeTests
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), sw.Elapsed.ToString());
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Server_DefaultValidator_AcceptsSameExecutable()
     {
         // テストでは中継も同じプロセス（同じ exe）なので、既定の検査（接続元が自分と同じ exe か）を通る
