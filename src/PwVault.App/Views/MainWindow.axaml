@@ -3,20 +3,39 @@
         xmlns:vm="using:PwVault.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
         x:Class="PwVault.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="PwVault.App">
+        Title="PwVault"
+        Width="1100" Height="720" MinWidth="760" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource PaneBackground}">
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainViewModel />
-    </Design.DataContext>
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+L" Command="{Binding LockCommand}" />
+    </Window.KeyBindings>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+    <Panel>
+        <ContentControl Content="{Binding CurrentPage}" />
 
+        <!-- 確認ダイアログ（ウィンドウ内オーバーレイ） -->
+        <Panel IsVisible="{Binding Confirm, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Background="{DynamicResource OverlayBackground}">
+            <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    DataContext="{Binding Confirm}" x:DataType="vm:ConfirmRequest">
+                <StackPanel Spacing="16">
+                    <TextBlock Classes="h2" Text="{Binding Title}" />
+                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Content="キャンセル" IsCancel="True"
+                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConfirmCancelCommand}" />
+                        <Button Classes="accent" Content="{Binding OkText}" IsDefault="True"
+                                Classes.danger="{Binding IsDanger}"
+                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConfirmOkCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Panel>
+    </Panel>
 </Window>

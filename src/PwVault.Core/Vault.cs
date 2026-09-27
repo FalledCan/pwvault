@@ -260,7 +260,7 @@ public sealed class Vault : IDisposable
 
     private void Put(Guid id, EntryData data, long revision)
     {
-        var json = JsonSerializer.SerializeToUtf8Bytes(data, EntryData.JsonOptions);
+        var json = JsonSerializer.SerializeToUtf8Bytes(data, EntryJsonContext.Default.EntryData);
         try
         {
             _records[id] = Seal(id, revision, deleted: false, json);
@@ -341,7 +341,7 @@ public sealed class Vault : IDisposable
 
         try
         {
-            return JsonSerializer.Deserialize<EntryData>(plaintext.Span, EntryData.JsonOptions)
+            return JsonSerializer.Deserialize(plaintext.Span, EntryJsonContext.Default.EntryData)
                 ?? throw new JsonException();
         }
         catch (JsonException)

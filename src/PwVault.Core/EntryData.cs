@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PwVault.Core;
@@ -35,12 +34,11 @@ public sealed class EntryData
         Favorite = Favorite,
         TrashedAt = TrashedAt,
     };
-
-    internal static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
 }
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(EntryData))]
+internal sealed partial class EntryJsonContext : JsonSerializerContext;
 
 /// <summary>パスワード変更履歴の 1 件（FR-15）。</summary>
 public sealed record PasswordHistoryItem(string Password, DateTimeOffset ChangedAt);

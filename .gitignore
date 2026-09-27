@@ -480,3 +480,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# PwVault: テストで生成したスクリーンショットなど
+artifacts/
+# 誤って保管庫やエクスポートをコミットしないように
+*.pwv
+*.pwv.bak*
+*.pwv.corrupt-*
+

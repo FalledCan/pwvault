@@ -4,6 +4,7 @@
     <Project Path="src/PwVault.Core/PwVault.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PwVault.App.Tests/PwVault.App.Tests.csproj" />
     <Project Path="tests/PwVault.Core.Tests/PwVault.Core.Tests.csproj" />
   </Folder>
 </Solution>

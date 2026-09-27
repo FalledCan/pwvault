@@ -3,13 +3,96 @@
              x:Class="PwVault.App.App"
              xmlns:local="using:PwVault.App"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="PaneBackground" Color="#F5F6F8" />
+                    <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CardBorder" Color="#E1E4E8" />
+                    <SolidColorBrush x:Key="MutedText" Color="#5F6670" />
+                    <SolidColorBrush x:Key="ErrorText" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="WarningText" Color="#9A5B00" />
+                    <SolidColorBrush x:Key="SuccessText" Color="#0F7B0F" />
+                    <SolidColorBrush x:Key="OverlayBackground" Color="#66000000" />
+                    <SolidColorBrush x:Key="AvatarBackground" Color="#DDE7F7" />
+                    <SolidColorBrush x:Key="AvatarForeground" Color="#1F4E9A" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="PaneBackground" Color="#1C1D20" />
+                    <SolidColorBrush x:Key="CardBackground" Color="#26282C" />
+                    <SolidColorBrush x:Key="CardBorder" Color="#3A3D42" />
+                    <SolidColorBrush x:Key="MutedText" Color="#A3A9B2" />
+                    <SolidColorBrush x:Key="ErrorText" Color="#FF99A4" />
+                    <SolidColorBrush x:Key="WarningText" Color="#F2C661" />
+                    <SolidColorBrush x:Key="SuccessText" Color="#6CCB5F" />
+                    <SolidColorBrush x:Key="OverlayBackground" Color="#99000000" />
+                    <SolidColorBrush x:Key="AvatarBackground" Color="#2D3E5C" />
+                    <SolidColorBrush x:Key="AvatarForeground" Color="#B8D0F5" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="Yu Gothic UI, Meiryo UI, Segoe UI, sans-serif" />
+        </Style>
+        <Style Selector="TextBlock.h1">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.h2">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.success">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="20" />
+        </Style>
+        <Style Selector="Button.danger">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorText}" />
+        </Style>
+        <Style Selector="Button.icon">
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="MinWidth" Value="36" />
+        </Style>
+        <Style Selector="ProgressBar.strength">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="5" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="MinHeight" Value="6" />
+        </Style>
     </Application.Styles>
 </Application>

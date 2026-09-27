@@ -134,6 +134,19 @@ public class CryptoVectorTests
     }
 
     [Fact]
+    public void Calibrator_ProducesValidParametersNearTarget()
+    {
+        var kdf = KdfCalibrator.Calibrate(target: TimeSpan.FromMilliseconds(300));
+        Assert.True(kdf.IsValid);
+        Assert.InRange(kdf.MemoryKiB, KdfCalibrator.DefaultMinMemoryKiB, KdfCalibrator.DefaultMaxMemoryKiB);
+        Assert.InRange(kdf.Iterations, KdfParameters.MinRecommendedIterations, KdfCalibrator.MaxCalibratedIterations);
+
+        // 固定メモリ指定ではメモリを増やさない
+        Assert.Equal(KdfCalibrator.DefaultMinMemoryKiB,
+            KdfCalibrator.Calibrate(KdfCalibrator.DefaultMinMemoryKiB, KdfCalibrator.DefaultMinMemoryKiB, TimeSpan.FromMilliseconds(100)).MemoryKiB);
+    }
+
+    [Fact]
     public void SecretBuffer_ZeroesOnDispose()
     {
         var buffer = SecretBuffer.Allocate(8);

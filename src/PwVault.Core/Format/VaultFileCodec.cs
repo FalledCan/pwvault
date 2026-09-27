@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using PwVault.Core.Crypto;
 
 namespace PwVault.Core.Format;
@@ -17,19 +19,15 @@ public static class VaultFileCodec
 {
     private const string ChecksumPrefix = "sha256:";
 
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true,
-    };
+    // ソース生成を使う（リフレクション不要なので、トリミングや AOT で発行しても動く）
+    private static JsonTypeInfo<VaultFileDto> TypeInfo => VaultJsonContext.Default.VaultFileDto;
 
     public static byte[] Serialize(VaultDocument document)
     {
         var dto = ToDto(document);
         dto.Checksum = null;
-        dto.Checksum = ChecksumPrefix + Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(dto, Options)));
-        return JsonSerializer.SerializeToUtf8Bytes(dto, Options);
+        dto.Checksum = ChecksumPrefix + Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(dto, TypeInfo)));
+        return JsonSerializer.SerializeToUtf8Bytes(dto, TypeInfo);
     }
 
     public static VaultDocument Deserialize(ReadOnlySpan<byte> bytes)
@@ -37,7 +35,7 @@ public static class VaultFileCodec
         VaultFileDto? dto;
         try
         {
-            dto = JsonSerializer.Deserialize<VaultFileDto>(bytes, Options);
+            dto = JsonSerializer.Deserialize(bytes, TypeInfo);
         }
         catch (JsonException ex)
         {
@@ -60,7 +58,7 @@ public static class VaultFileCodec
     {
         var stored = dto.Checksum;
         dto.Checksum = null;
-        var actual = ChecksumPrefix + Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(dto, Options)));
+        var actual = ChecksumPrefix + Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(dto, TypeInfo)));
         dto.Checksum = stored;
 
         if (stored is null || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(stored), Encoding.ASCII.GetBytes(actual)))
@@ -150,43 +148,50 @@ public static class VaultFileCodec
 
     private static VaultException Invalid(string message, Exception? inner = null) =>
         new(VaultErrorKind.InvalidFormat, message, inner);
+}
 
-    // ---- JSON DTO（プロパティ順がそのままファイル上の順になる） ----
+// ---- JSON DTO（プロパティ順がそのままファイル上の順になる） ----
 
-    private sealed class VaultFileDto
-    {
-        public string? Magic { get; set; }
-        public int FormatVersion { get; set; }
-        public string? VaultId { get; set; }
-        public KdfDto? Kdf { get; set; }
-        public string? Cipher { get; set; }
-        public BoxDto? WrappedVaultKey { get; set; }
-        public List<EntryDto>? Entries { get; set; }
-        public string? Checksum { get; set; }
-    }
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    WriteIndented = true)]
+[JsonSerializable(typeof(VaultFileDto))]
+internal sealed partial class VaultJsonContext : JsonSerializerContext;
 
-    private sealed class KdfDto
-    {
-        public string? Alg { get; set; }
-        public int MemKib { get; set; }
-        public int Iterations { get; set; }
-        public int Parallelism { get; set; }
-        public byte[]? Salt { get; set; }
-    }
+internal sealed class VaultFileDto
+{
+    public string? Magic { get; set; }
+    public int FormatVersion { get; set; }
+    public string? VaultId { get; set; }
+    public KdfDto? Kdf { get; set; }
+    public string? Cipher { get; set; }
+    public BoxDto? WrappedVaultKey { get; set; }
+    public List<EntryDto>? Entries { get; set; }
+    public string? Checksum { get; set; }
+}
 
-    private sealed class BoxDto
-    {
-        public byte[]? Nonce { get; set; }
-        public byte[]? Ciphertext { get; set; }
-    }
+internal sealed class KdfDto
+{
+    public string? Alg { get; set; }
+    public int MemKib { get; set; }
+    public int Iterations { get; set; }
+    public int Parallelism { get; set; }
+    public byte[]? Salt { get; set; }
+}
 
-    private sealed class EntryDto
-    {
-        public string? Id { get; set; }
-        public long Revision { get; set; }
-        public string? UpdatedAt { get; set; }
-        public bool Deleted { get; set; }
-        public byte[]? Nonce { get; set; }
-        public byte[]? Ciphertext { get; set; }
-    }
+internal sealed class BoxDto
+{
+    public byte[]? Nonce { get; set; }
+    public byte[]? Ciphertext { get; set; }
+}
+
+internal sealed class EntryDto
+{
+    public string? Id { get; set; }
+    public long Revision { get; set; }
+    public string? UpdatedAt { get; set; }
+    public bool Deleted { get; set; }
+    public byte[]? Nonce { get; set; }
+    public byte[]? Ciphertext { get; set; }
 }
