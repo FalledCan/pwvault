@@ -31,6 +31,24 @@
                 </StackPanel>
             </Border>
 
+            <!-- 表示・操作 -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="h2" Text="表示・操作" />
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding FetchSiteIcons}" Content="サイトのアイコンを各サイトから取得する" />
+                        <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
+                                   Text="ブラウザ連携で受け取れなかったアイコンを、PwVault が各サイト（例: example.com）に直接取りに行きます。問い合わせ先はそのサイト自身だけで、クッキーは送りません。オフにすると PwVault は一切通信しません。取得したアイコンは保管庫の鍵で暗号化して保存します。" />
+                    </StackPanel>
+                    <CheckBox IsChecked="{Binding DoubleClickOpensUrl}" Content="一覧をダブルクリックしてサイトを開く" />
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding CloseToTray}" Content="×ボタンで閉じずに通知領域（タスクトレイ）に隠す" />
+                        <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
+                                   Text="隠れている間もブラウザ連携と自動ロックは動きます。終了するには通知領域のアイコンを右クリックして「終了」を選びます。" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- ブラウザ連携 -->
             <Border Classes="card">
                 <StackPanel Spacing="12">

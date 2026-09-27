@@ -8,7 +8,7 @@ public enum IntegrationStatus
 {
     NotRegistered,
     Registered,
-    /// <summary>登録済みだが、登録された exe の場所が今の exe と違う（exe を移動した）。</summary>
+    /// <summary>登録済みだが、どれかのブラウザの登録が欠けている、または別の場所の exe を指している（exe を移動した等）。</summary>
     PathMismatch,
 }
 
@@ -67,12 +67,24 @@ public sealed class BrowserIntegration
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    /// <summary>
+    /// 登録状態。Chrome・Edge・Firefox のすべてについて「レジストリ → マニフェスト → この exe」がつながっていれば Registered。
+    /// どれか 1 つでも欠けている・古い exe を指していれば PathMismatch（起動時に登録し直す）。
+    /// </summary>
     public IntegrationStatus GetStatus(string exePath)
     {
-        using var key = Registry.CurrentUser.OpenSubKey($@"{_registryBase}\{ChromiumKeys[0]}");
+        var states = ChromiumKeys.Append(FirefoxKey).Select(k => CheckKey(k, exePath)).ToList();
+        if (states.All(s => s == IntegrationStatus.NotRegistered))
+            return IntegrationStatus.NotRegistered;
+        return states.All(s => s == IntegrationStatus.Registered) ? IntegrationStatus.Registered : IntegrationStatus.PathMismatch;
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private IntegrationStatus CheckKey(string subKey, string exePath)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey($@"{_registryBase}\{subKey}");
         if (key?.GetValue(null) is not string manifestPath || !File.Exists(manifestPath))
             return IntegrationStatus.NotRegistered;
-
         try
         {
             var registered = JsonNode.Parse(File.ReadAllText(manifestPath))?["path"]?.GetValue<string>();

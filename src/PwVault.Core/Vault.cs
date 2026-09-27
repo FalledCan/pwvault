@@ -239,6 +239,26 @@ public sealed class Vault : IDisposable
 
     public bool IsLocked => _vaultKey is null;
 
+    /// <summary>
+    /// 保管庫本体以外の付随データ（アイコンのキャッシュなど）を保管庫鍵で暗号化する。
+    /// AAD に用途名と保管庫 ID を入れるので、エントリや別の用途・別の保管庫のデータとは取り違えられない。
+    /// </summary>
+    public SealedBox SealAuxiliary(string purpose, ReadOnlySpan<byte> plaintext)
+    {
+        EnsureUnlocked();
+        return AeadBox.Seal(_vaultKey!, AuxiliaryAad(purpose), plaintext);
+    }
+
+    /// <summary><see cref="SealAuxiliary"/> で暗号化したものを開く。認証に失敗したら null。</summary>
+    public SecretBuffer? OpenAuxiliary(string purpose, SealedBox box)
+    {
+        EnsureUnlocked();
+        return AeadBox.Open(_vaultKey!, AuxiliaryAad(purpose), box);
+    }
+
+    private byte[] AuxiliaryAad(string purpose) =>
+        new AadBuilder().String("pwvault/aux").String(purpose).Guid(_header.VaultId).ToArray();
+
     /// <summary>ロック。保管庫鍵を破棄（libsodium がゼロ埋め）し、復号済みデータへの参照を消す。</summary>
     public void Dispose()
     {

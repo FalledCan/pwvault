@@ -31,6 +31,31 @@ public sealed class FakeFileDialogs : IFileDialogs
         Task.FromResult(Next.Count > 0 ? Next.Dequeue() : null);
 }
 
+/// <summary>
+/// サイトの代わり。Pages に「URL → (Content-Type, 中身)」を積んでおくと返し、無いものは 404。
+/// 実際のネットワークには一切出ない。
+/// </summary>
+public sealed class FakeIconServer : HttpMessageHandler
+{
+    public Dictionary<string, (string Type, byte[] Body)> Pages { get; } = [];
+    public List<Uri> Requests { get; } = [];
+
+    /// <summary>テスト用の本物の PNG（拡張機能のアイコン）。</summary>
+    public static byte[] Png => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "browser-extension", "icons", "32.png"));
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        lock (Requests) Requests.Add(request.RequestUri!);
+        if (Pages.TryGetValue(request.RequestUri!.AbsoluteUri, out var page))
+        {
+            var content = new ByteArrayContent(page.Body);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(page.Type);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content, RequestMessage = request });
+        }
+        return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { RequestMessage = request });
+    }
+}
+
 /// <summary>一時ディレクトリ上で MainWindow と MainViewModel を組み立てる。</summary>
 public sealed class Harness : IDisposable
 {
@@ -41,6 +66,12 @@ public sealed class Harness : IDisposable
     public AutoLockService AutoLock { get; } = new();
 
     public string VaultPath => Path.Combine(Dir, "vault.pwv");
+
+    /// <summary>サイトからのアイコン取得の偽物。</summary>
+    public FakeIconServer Icons { get; } = new();
+
+    /// <summary>「ブラウザで開く」が呼ばれた URL。</summary>
+    public List<Uri> OpenedUrls { get; } = [];
 
     /// <summary>テスト用のパイプ名（本物の PwVault と衝突しないように毎回変える）。</summary>
     public string PipeName { get; } = "PwVault.Test." + Guid.NewGuid().ToString("N");
@@ -62,7 +93,10 @@ public sealed class Harness : IDisposable
         }
 
         Window = new MainWindow { Width = 1100, Height = 720 };
-        Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName);
+        // テストでは通信しない（アイコンは Icons に積んだものだけ返す）・ブラウザも開かない
+        Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
+            new FaviconFetcher(Icons));
+        Main.OpenInBrowser = OpenedUrls.Add;
         Window.DataContext = Main;
         Window.Show();
         Pump();
@@ -110,6 +144,7 @@ public sealed class Harness : IDisposable
                 if (parent is { SubKeyCount: 0 })
                     Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(@"Software\PwVaultTest", throwOnMissingSubKey: false);
         }
+        Window.ForceClose = true;
         Window.Close();
         AutoLock.Dispose();
         try { Directory.Delete(Dir, recursive: true); } catch (IOException) { }

@@ -8,8 +8,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>PwVault</AssemblyName>
-    <Version>0.2.0</Version>
-    <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
+    <Version>0.3.0</Version>
+    <ApplicationIcon>Assets\pwvault.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- 発行時は事前コンパイルして初回起動を速くする（NFR-04） -->

@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PwVault.App.Services;
 using PwVault.Core;
+using PwVault.Core.Bridge;
 using PwVault.Core.Tools;
 
 namespace PwVault.App.ViewModels;
@@ -14,8 +16,15 @@ public sealed record FilterOption(string Label, FilterKind Kind, string? Tag = n
 public sealed record SortOption(string Label, EntrySort Sort);
 
 /// <summary>一覧の 1 行。</summary>
-public sealed class EntryItemViewModel(VaultEntry entry, bool isWeak, bool isReused)
+public sealed partial class EntryItemViewModel(VaultEntry entry, bool isWeak, bool isReused) : ObservableObject
 {
+    /// <summary>サイトのアイコン。無ければ頭文字の丸を表示する。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasIcon))]
+    public partial Bitmap? Icon { get; set; }
+
+    public bool HasIcon => Icon is not null;
+    public string? HostKey { get; } = UrlMatcher.HostKey(entry.Data.Url);
     public VaultEntry Entry { get; } = entry;
     public Guid Id => Entry.Id;
     public string Title => Entry.Data.Title.Length > 0 ? Entry.Data.Title : "（無題）";
@@ -49,12 +58,36 @@ public partial class VaultViewModel : ViewModelBase
     {
         Main = main;
         _vault = vault;
+        Icons = new IconService(vault, main.IconFetcher);
+        Icons.IconChanged += OnIconChanged;
         SelectedSort = SortOptions.FirstOrDefault(s => s.Sort == main.Settings.Sort) ?? SortOptions[0];
         main.Clipboard.CountdownChanged += OnClipboardCountdown;
         Refresh();
     }
 
     public MainViewModel Main { get; }
+
+    public IconService Icons { get; }
+
+    private void OnIconChanged(string host)
+    {
+        foreach (var item in Items.Where(i => i.HostKey == host))
+            item.Icon = Icons.GetIcon(item.Entry.Data.Url);
+    }
+
+    /// <summary>設定でオンなら、アイコンの無いサイトから取得を始める。</summary>
+    public void FetchIconsIfEnabled()
+    {
+        if (_vault is not null && Main.Settings.FetchSiteIcons)
+            Icons.FetchMissing(_vault.GetEntries());
+    }
+
+    /// <summary>一覧のダブルクリック。設定でオンならサイトを開く。</summary>
+    public void OnItemDoubleClicked()
+    {
+        if (Main.Settings.DoubleClickOpensUrl)
+            OpenUrl();
+    }
     public Vault Vault => _vault ?? throw new InvalidOperationException("保管庫はロックされています。");
 
     public bool IsUnlocked => _vault is { IsLocked: false };
@@ -144,6 +177,10 @@ public partial class VaultViewModel : ViewModelBase
 
         SelectedFilter = Filters.FirstOrDefault(f => f.Kind == previousFilter?.Kind && f.Tag == previousFilter?.Tag) ?? Filters[0];
         ApplyFilter();
+
+        // 完全削除したエントリのアイコンは消し、新しく増えたサイトのアイコンは取りに行く
+        Icons.Prune(entries);
+        FetchIconsIfEnabled();
     }
 
     private void ApplyFilter()
@@ -164,7 +201,10 @@ public partial class VaultViewModel : ViewModelBase
 
         Items.Clear();
         foreach (var e in result)
-            Items.Add(new EntryItemViewModel(e, _health.Weak.Contains(e.Id), _health.Reused.Contains(e.Id)));
+            Items.Add(new EntryItemViewModel(e, _health.Weak.Contains(e.Id), _health.Reused.Contains(e.Id))
+            {
+                Icon = Icons.GetIcon(e.Data.Url),
+            });
 
         SelectedItem = Items.FirstOrDefault(i => i.Id == selectedId);
         CountText = $"{Items.Count} 件";
@@ -295,7 +335,7 @@ public partial class VaultViewModel : ViewModelBase
         if (SelectedItem is not { HasUrl: true } item) return;
         try
         {
-            Process.Start(new ProcessStartInfo(new Uri(item.Entry.Data.Url).AbsoluteUri) { UseShellExecute = true });
+            Main.OpenInBrowser(new Uri(item.Entry.Data.Url));
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
@@ -365,6 +405,8 @@ public partial class VaultViewModel : ViewModelBase
         Main.Clipboard.CountdownChanged -= OnClipboardCountdown;
         var path = _vault?.FilePath ?? Main.Settings.VaultPath ?? "";
         if (_vault is { IsDirty: true }) Persist();
+        Icons.IconChanged -= OnIconChanged;
+        Icons.Dispose(); // 保管庫鍵を捨てる前に、未保存のアイコンを暗号化して保存する
         _vault?.Dispose();
         _vault = null;
         Editor = null;

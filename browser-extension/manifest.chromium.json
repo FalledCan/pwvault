@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "PwVault 自動入力",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "入力欄の右クリックメニューから、PwVault に保存したユーザーIDとパスワードを入力します。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3EXKUfF6bzRMkrZM1YX8pZyXIVsPFkob1KdQ9BWCnUeZL8F+WH4cvnuOqOVN+KBK6sSv2LNz7wvIrGZFcVxMyLdKAmlviCYaLx9Al8+xjH/0kkqiQ6ha86sFOTOJdoWX8zUiXluPA+ZJjePL8ZzRe+bxAPdsbuPIm5lairG/T0q7/NKnKh6udvtqs4HYq6kg+Lg9QkVGZsnDZU3hvh8wioel4v7vqULutd8OHC4Z4gaLZgifwC7s6qoEprkvkzAUBpz2gPfsZbCL1HlzE6yQx1FLImWnDgD3JqClcvhVrhHRPqmKY69kUhbXWsPRVHVAATOaaUbrUjTdcJyZnCiqTQIDAQAB",
-  "permissions": ["contextMenus", "nativeMessaging", "scripting", "activeTab", "tabs"],
+  "permissions": ["contextMenus", "nativeMessaging", "scripting", "activeTab", "tabs", "favicon"],
   "background": { "service_worker": "background.js" },
   "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
 }

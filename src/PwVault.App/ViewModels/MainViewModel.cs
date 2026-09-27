@@ -41,8 +41,9 @@ public partial class MainViewModel : ViewModelBase
     public partial ConfirmRequest? Confirm { get; set; }
 
     public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs,
-        BrowserIntegration? browserIntegration = null, string? bridgePipeName = null)
+        BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null)
     {
+        IconFetcher = iconFetcher ?? new FaviconFetcher();
         SettingsStore = store;
         Settings = store.Load();
         Clipboard = clipboard;
@@ -115,7 +116,17 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>保管庫は UI スレッドでしか触らないので、要求の処理は UI スレッドで行う。ロック中は null を渡して「ロック中」と答える。</summary>
     internal Task<BridgeResponse> HandleBridgeRequestAsync(BridgeRequest? request) =>
         Dispatcher.UIThread.InvokeAsync(() =>
-            BridgeHandler.Handle(request, CurrentPage is VaultViewModel { IsUnlocked: true } vault ? vault.Vault.GetEntries() : null)).GetTask();
+        {
+            var vault = CurrentPage as VaultViewModel is { IsUnlocked: true } v ? v : null;
+            return BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data));
+        }).GetTask();
+
+    /// <summary>サイトからアイコンを取得する部品（テストでは通信しないものに差し替える）。</summary>
+    public FaviconFetcher IconFetcher { get; }
+
+    /// <summary>既定のブラウザで URL を開く（テストでは実際に開かないものに差し替える）。</summary>
+    public Action<Uri> OpenInBrowser { get; set; } = uri =>
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
 
     public void SaveSettings()
     {

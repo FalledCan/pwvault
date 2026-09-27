@@ -75,14 +75,21 @@
                                            IsVisible="{Binding !Items.Count}"
                                            Text="エントリがありません。&#x0a;「＋ 新規」または「取込/書出」から追加できます。" />
                                 <ListBox x:Name="EntryList" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                         Background="Transparent">
+                                         Background="Transparent" DoubleTapped="OnEntryDoubleTapped">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:EntryItemViewModel">
                                             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                                <Border Width="32" Height="32" CornerRadius="16" Background="{DynamicResource AvatarBackground}">
-                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource AvatarForeground}" Text="{Binding Initial}" />
-                                                </Border>
+                                                <Panel Width="32" Height="32">
+                                                    <!-- サイトのアイコン。無ければ頭文字の丸 -->
+                                                    <Border CornerRadius="16" Background="{DynamicResource AvatarBackground}" IsVisible="{Binding !HasIcon}">
+                                                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource AvatarForeground}" Text="{Binding Initial}" />
+                                                    </Border>
+                                                    <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource CardBackground}" IsVisible="{Binding HasIcon}">
+                                                        <Image Source="{Binding Icon}" Width="24" Height="24" Stretch="Uniform"
+                                                               RenderOptions.BitmapInterpolationMode="HighQuality" />
+                                                    </Border>
+                                                </Panel>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                                     <TextBlock Text="{Binding Subtitle}" FontSize="12" Classes="muted" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />

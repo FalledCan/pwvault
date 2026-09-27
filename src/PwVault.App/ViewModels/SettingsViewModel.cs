@@ -25,6 +25,10 @@ public partial class SettingsViewModel : ViewModelBase
         Iterations = owner.Vault.Kdf.Iterations;
         UpdateKdfCurrent();
         UpdateBrowserStatus();
+        FetchSiteIcons = s.FetchSiteIcons;
+        DoubleClickOpensUrl = s.DoubleClickOpensUrl;
+        CloseToTray = s.CloseToTray;
+        _loaded = true;
     }
 
     public string VaultPath => _owner.Vault.FilePath;
@@ -32,6 +36,35 @@ public partial class SettingsViewModel : ViewModelBase
     public int MinIterations => KdfParameters.MinRecommendedIterations;
     public int MaxMemory => MaxMemoryMiB;
     public int MaxIter => MaxIterations;
+
+    // ---- 表示・操作（切り替えたらすぐ保存する）
+    private readonly bool _loaded;
+
+    [ObservableProperty] public partial bool FetchSiteIcons { get; set; }
+    [ObservableProperty] public partial bool DoubleClickOpensUrl { get; set; }
+    [ObservableProperty] public partial bool CloseToTray { get; set; }
+
+    partial void OnFetchSiteIconsChanged(bool value)
+    {
+        if (!_loaded) return;
+        _owner.Main.Settings.FetchSiteIcons = value;
+        _owner.Main.SaveSettings();
+        _owner.FetchIconsIfEnabled();
+    }
+
+    partial void OnDoubleClickOpensUrlChanged(bool value)
+    {
+        if (!_loaded) return;
+        _owner.Main.Settings.DoubleClickOpensUrl = value;
+        _owner.Main.SaveSettings();
+    }
+
+    partial void OnCloseToTrayChanged(bool value)
+    {
+        if (!_loaded) return;
+        _owner.Main.Settings.CloseToTray = value;
+        _owner.Main.SaveSettings();
+    }
 
     // ---- 一般
     [ObservableProperty] public partial decimal? AutoLockMinutes { get; set; }

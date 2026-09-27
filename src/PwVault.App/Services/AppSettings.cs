@@ -20,6 +20,18 @@ public sealed class AppSettings
     /// <summary>ブラウザ連携（右クリックからの自動入力）を有効にしているか。</summary>
     public bool BrowserIntegration { get; set; }
 
+    /// <summary>
+    /// ブラウザ拡張から届かなかったサイトのアイコンを、PwVault が各サイトから直接取得するか。
+    /// オフにすると PwVault 本体はネットワーク通信を一切しない（要件 NFR-05 の状態）。
+    /// </summary>
+    public bool FetchSiteIcons { get; set; } = true;
+
+    /// <summary>一覧のダブルクリックでサイトを開くか。</summary>
+    public bool DoubleClickOpensUrl { get; set; } = true;
+
+    /// <summary>×ボタンで終了せず、通知領域（タスクトレイ）に隠すか。</summary>
+    public bool CloseToTray { get; set; } = true;
+
     public static string DefaultVaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
 }

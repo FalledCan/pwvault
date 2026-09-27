@@ -23,6 +23,21 @@ public partial class MainWindow : Window, IFileDialogs
     private void OnActivity(object? sender, RoutedEventArgs e) =>
         (DataContext as MainViewModel)?.AutoLock.NotifyActivity();
 
+    /// <summary>true にすると、×ボタンの設定にかかわらず本当に閉じる（通知領域の「終了」など）。</summary>
+    public bool ForceClose { get; set; }
+
+    /// <summary>×ボタンは設定に応じて通知領域に隠す。OS のシャットダウンやアプリの終了では本当に閉じる。</summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (!ForceClose && e.CloseReason == WindowCloseReason.WindowClosing
+            && DataContext is MainViewModel { Settings.CloseToTray: true })
+        {
+            e.Cancel = true;
+            Hide();
+        }
+        base.OnClosing(e);
+    }
+
     public async Task<string?> SaveFileAsync(string title, string suggestedFileName, string filterName, string extension)
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions

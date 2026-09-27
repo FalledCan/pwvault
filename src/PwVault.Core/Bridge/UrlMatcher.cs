@@ -58,6 +58,13 @@ public static class UrlMatcher
             .Select(x => x.Entry)
             .ToList();
 
+    /// <summary>
+    /// アイコンの保存キーにするホスト名（小文字・先頭の www. を除く）。保存 URL と同じくスキーム省略は https とみなす。
+    /// http/https 以外や URL でないものは null。
+    /// </summary>
+    public static string? HostKey(string? url) =>
+        TryParse(url, assumeHttps: true, out var uri) ? Normalize(uri.IdnHost) : null;
+
     /// <summary>http/https の URL だけを受け付ける。保存 URL はスキーム省略（example.com）を https とみなす。</summary>
     private static bool TryParse(string? url, bool assumeHttps, out Uri uri)
     {

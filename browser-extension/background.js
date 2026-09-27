@@ -82,8 +82,52 @@ function rebuild(url, { force = false } = {}) {
     await create({ id: REFRESH, parentId: ROOT, title: "候補を更新" });
 
     Object.assign(state, { url, error: response.ok ? null : response.error, entries, builtAt: Date.now() });
+    if (entries.length > 0) void sendIcon(url);
   }).catch((e) => console.warn("PwVault: メニューを更新できませんでした", e));
   return queue;
+}
+
+// ---------------------------------------------------------------- サイトのアイコン
+
+// このバックグラウンドの寿命の間に渡し終えたオリジン（同じアイコンを何度も送らない）
+const sentIcons = new Set();
+
+function toBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+/**
+ * 保存済みエントリがあるサイトについて、タブのアイコンを PwVault に渡す（一覧の表示用）。
+ * Chrome / Edge はブラウザ内のアイコンのキャッシュ（_favicon）から読むので通信は発生しない。
+ * Firefox はタブのアイコンが data: URL のときだけ渡す（それ以外は PwVault が各サイトから取得する）。
+ */
+async function sendIcon(url) {
+  try {
+    const origin = new URL(url).origin;
+    if (sentIcons.has(origin)) return;
+    const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab || tab.url !== url || !tab.favIconUrl) return; // アイコンがまだ読み込まれていない
+
+    let icon = null;
+    if (/^data:image\/(png|x-icon|vnd\.microsoft\.icon|jpeg|gif|webp|bmp)[;,]/i.test(tab.favIconUrl)) {
+      icon = tab.favIconUrl;
+    } else if (!IS_FIREFOX) {
+      const faviconUrl = api.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
+      const response = await fetch(faviconUrl);
+      if (!response.ok) return;
+      const blob = await response.blob();
+      if (blob.size === 0 || blob.size > 48 * 1024) return;
+      icon = `data:${blob.type || "image/png"};base64,${toBase64(new Uint8Array(await blob.arrayBuffer()))}`;
+    }
+    if (!icon) return;
+
+    const result = await send({ type: "icon", url, icon });
+    if (result.ok) sentIcons.add(origin);
+  } catch {
+    // アイコンは無くても困らないので黙って諦める
+  }
 }
 
 async function rebuildForActiveTab(options) {
@@ -224,6 +268,8 @@ api.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 api.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (tab.active && (change.url || change.status === "complete")) void rebuild(tab.url);
+  // アイコンは読み込み完了より後に届くことがある。候補のあるページなら渡す
+  if (tab.active && change.favIconUrl && tab.url === state.url && state.entries.length > 0) void sendIcon(tab.url);
 });
 api.windows.onFocusChanged.addListener((windowId) => {
   if (windowId !== api.windows.WINDOW_ID_NONE) void rebuildForActiveTab({ force: true });

@@ -13,10 +13,14 @@ public sealed class BridgeRequest
     public const string TypeStatus = "status";
     public const string TypeList = "list";
     public const string TypeFill = "fill";
+    public const string TypeIcon = "icon";
 
     public string? Type { get; set; }
     public string? Url { get; set; }
     public string? Id { get; set; }
+
+    /// <summary>icon のとき: タブのアイコン（data:image/...;base64,... 形式）。</summary>
+    public string? Icon { get; set; }
 }
 
 public sealed class BridgeResponse
@@ -118,8 +122,14 @@ public static class BridgeMessage
 /// </summary>
 public static class BridgeHandler
 {
+    /// <summary>ブラウザから受け取るアイコンとして認める画像形式（SVG はスクリプトを含みうるので受け取らない）。</summary>
+    private static readonly string[] IconMimeTypes =
+        ["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/jpeg", "image/gif", "image/webp", "image/bmp"];
+
     /// <param name="entries">アンロック中なら全エントリ、ロック中なら null。</param>
-    public static BridgeResponse Handle(BridgeRequest? request, IReadOnlyList<VaultEntry>? entries)
+    /// <param name="storeIcon">icon 要求で受け取ったアイコンを保存する（ホスト名, 画像データ）。</param>
+    public static BridgeResponse Handle(BridgeRequest? request, IReadOnlyList<VaultEntry>? entries,
+        Action<string, byte[]>? storeIcon = null)
     {
         if (request?.Type is null)
             return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
@@ -150,8 +160,40 @@ public static class BridgeHandler
                     ? BridgeResponse.Fail(BridgeResponse.ErrorNoMatch)
                     : new BridgeResponse { Ok = true, Username = entry.Data.Username, Password = entry.Data.Password };
 
+            case BridgeRequest.TypeIcon:
+                // 保存済みエントリがあるサイトのアイコンだけ受け取る（閲覧履歴を集めない）
+                if (matches.Count == 0)
+                    return BridgeResponse.Fail(BridgeResponse.ErrorNoMatch);
+                if (storeIcon is null || !TryDecodeIcon(request.Icon, out var image))
+                    return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
+                // 保存 URL のホスト（login.example.com で開いても example.com で保存していればそちら）に紐づける
+                foreach (var host in matches.Select(e => UrlMatcher.HostKey(e.Data.Url)).OfType<string>().Distinct())
+                    storeIcon(host, image);
+                return new BridgeResponse { Ok = true };
+
             default:
                 return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
         }
+    }
+
+    internal static bool TryDecodeIcon(string? dataUrl, out byte[] image)
+    {
+        image = [];
+        if (dataUrl is null || !dataUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var comma = dataUrl.IndexOf(',');
+        if (comma < 0) return false;
+        var meta = dataUrl[5..comma].Split(';');
+        if (!IconMimeTypes.Contains(meta[0].ToLowerInvariant()) || !meta.Contains("base64", StringComparer.OrdinalIgnoreCase))
+            return false;
+        try
+        {
+            image = Convert.FromBase64String(dataUrl[(comma + 1)..]);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        return image.Length is > 0 and <= Icons.IconCache.MaxIconBytes;
     }
 }

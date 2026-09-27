@@ -185,6 +185,12 @@ public class BridgeTests
             Assert.False(File.Exists(Path.Combine(dir, "manifest.chromium.json")));
         }
 
+        // どれか 1 つのブラウザの登録が消えていたら「要修復」とみなす（起動時に登録し直す）
+        Registry.CurrentUser.DeleteSubKeyTree($@"{h.RegistryBase}\Microsoft\Edge\NativeMessagingHosts\{NativeHost.HostName}");
+        Assert.Equal(IntegrationStatus.PathMismatch, integration.GetStatus(exe));
+        integration.Register(exe);
+        Assert.Equal(IntegrationStatus.Registered, integration.GetStatus(exe));
+
         integration.Unregister();
         Assert.Equal(IntegrationStatus.NotRegistered, integration.GetStatus(exe));
     }
