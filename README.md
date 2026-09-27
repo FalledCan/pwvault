@@ -68,10 +68,21 @@ dotnet test
 dotnet test tests/PwVault.App.Tests -- --explicit only
 ```
 
-配布用の実行ファイル（.NET ランタイム同梱）:
+## ダウンロード・リリース
+
+[Releases](../../releases) から `PwVault-<版>-win-x64.exe` をダウンロードすれば、インストール不要でそのまま起動できます（.NET ランタイム同梱の単一ファイル）。`.sha256` はファイルが壊れていないかの確認用です。
+
+新しい版を出すときは、`src/PwVault.App/PwVault.App.csproj` の `<Version>` を上げてタグを push します。GitHub Actions がテスト・ビルドしてリリースに exe を添付します。
 
 ```bash
-dotnet publish src/PwVault.App -c Release -r win-x64 --self-contained -o publish
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+手元で同じ exe を作る場合:
+
+```bash
+dotnet publish src/PwVault.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o publish
 ```
 
 ## ファイル
