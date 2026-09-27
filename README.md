@@ -102,6 +102,14 @@ git push origin v0.1.0
 dotnet publish src/PwVault.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o publish
 ```
 
+## ライセンス
+
+Copyright (C) 2026 FalledCan
+
+[GNU General Public License v3.0](LICENSE)。改変して配布する場合は、同じライセンスでソースコードを公開してください。
+
+利用しているライブラリ（NSec / libsodium、Avalonia、CommunityToolkit.Mvvm、SkiaSharp など）はいずれも MIT・ISC 等の GPL-3.0 と両立するライセンスです。
+
 ## ファイル
 
 | 場所 | 内容 |
