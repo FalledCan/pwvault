@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer>
+        <StackPanel Spacing="16" Margin="24" MaxWidth="720">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="h1" Text="設定" />
+                <Button Grid.Column="1" Content="← 一覧に戻る" Command="{Binding BackCommand}" />
+            </Grid>
+            <TextBlock Classes="muted" FontSize="12" Text="{Binding VaultPath, StringFormat='保管庫: {0}'}" />
+
+            <!-- 一般 -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="一般" />
+                    <Grid ColumnDefinitions="260,160" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                        <TextBlock VerticalAlignment="Center" Text="自動ロックまでの無操作時間（分）" />
+                        <NumericUpDown Grid.Column="1" Minimum="1" Maximum="240" Increment="1" FormatString="0" Value="{Binding AutoLockMinutes}" />
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="クリップボードの保持時間（秒）" />
+                        <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="5" Maximum="600" Increment="5" FormatString="0" Value="{Binding ClipboardSeconds}" />
+                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="バックアップ（.bak）の世代数" />
+                        <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="20" Increment="1" FormatString="0" Value="{Binding BackupGenerations}" />
+                    </Grid>
+                    <TextBlock Classes="muted" FontSize="12" Text="OS のロック・スリープ時は設定にかかわらず即座にロックします。" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Classes="accent" Content="保存" Command="{Binding SaveGeneralCommand}" />
+                        <TextBlock Classes="success" VerticalAlignment="Center" Text="{Binding GeneralStatus}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- マスターパスワード変更 -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="マスターパスワードの変更" />
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="現在のマスターパスワード" />
+                        <TextBox PasswordChar="●" Text="{Binding CurrentPassword}" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="新しいマスターパスワード（12 文字以上）" />
+                        <TextBox PasswordChar="●" Text="{Binding NewPassword}" />
+                        <ProgressBar Classes="strength" Margin="0,6,0,0" Value="{Binding NewStrengthValue}" />
+                        <TextBlock Classes="muted" FontSize="12" Text="{Binding NewStrengthText}" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="新しいマスターパスワード（確認）" />
+                        <TextBox PasswordChar="●" Text="{Binding ConfirmNewPassword}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Classes="accent" Content="変更" IsEnabled="{Binding !PasswordBusy}" Command="{Binding ChangePasswordCommand}" />
+                        <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding PasswordBusy}" />
+                    </StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="{Binding PasswordStatus}" />
+                </StackPanel>
+            </Border>
+
+            <!-- KDF -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="鍵導出（Argon2id）のコスト" />
+                    <TextBlock Classes="muted" FontSize="12"
+                               Text="値を大きくすると、保管庫ファイルが盗まれたときの総当たりが遅くなりますが、アンロックにも時間がかかります。目安はアンロック 0.5〜1 秒です。" />
+                    <TextBlock Text="{Binding KdfCurrent}" />
+                    <Grid ColumnDefinitions="260,160" RowDefinitions="Auto,Auto" RowSpacing="10">
+                        <TextBlock VerticalAlignment="Center" Text="メモリ量（MiB）" />
+                        <NumericUpDown Grid.Column="1" Minimum="{Binding MinMemoryMiB}" Maximum="{Binding MaxMemory}" Increment="16" FormatString="0" Value="{Binding MemoryMiB}" />
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="反復回数" />
+                        <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="{Binding MinIterations}" Maximum="{Binding MaxIter}" Increment="1" FormatString="0" Value="{Binding Iterations}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="所要時間を計測" IsEnabled="{Binding !KdfBusy}" Command="{Binding MeasureKdfCommand}" />
+                        <Button Content="この PC に合わせて推奨値を計算" IsEnabled="{Binding !KdfBusy}" Command="{Binding RecommendKdfCommand}" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="適用にはマスターパスワードが必要です" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox PasswordChar="●" Text="{Binding KdfPassword}" />
+                            <Button Grid.Column="1" Classes="accent" Content="適用" IsEnabled="{Binding !KdfBusy}" Command="{Binding ApplyKdfCommand}" />
+                        </Grid>
+                    </StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="{Binding KdfStatus}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.ImportExportView"
+             x:DataType="vm:ImportExportViewModel">
+    <ScrollViewer>
+        <StackPanel Spacing="16" Margin="24" MaxWidth="720">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="h1" Text="インポート / エクスポート" />
+                <Button Grid.Column="1" Content="← 一覧に戻る" Command="{Binding BackCommand}" />
+            </Grid>
+
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="CSV から取り込む" />
+                    <TextBlock Classes="muted" FontSize="13"
+                               Text="対応形式: Chrome / Edge / Firefox のパスワード書き出し、Bitwarden（CSV）、KeePassXC（CSV）、PwVault。形式は自動で判定します。" />
+                    <Button Classes="accent" Content="CSV ファイルを選ぶ…" Command="{Binding ImportCommand}" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding ImportStatus}" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="暗号化バックアップ" />
+                    <TextBlock Classes="muted" FontSize="13"
+                               Text="保管庫を暗号化したまま別の場所（USB メモリなど）に書き出します。開くには現在のマスターパスワードが必要です。" />
+                    <Button Classes="accent" Content="バックアップを保存…" Command="{Binding ExportBackupCommand}" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding BackupStatus}" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="平文 CSV に書き出す" />
+                    <TextBlock Classes="error"
+                               Text="⚠ 書き出したファイルは暗号化されていません。すべてのパスワードが誰でも読める状態になります。他のパスワードマネージャーへの移行など、必要なときだけ使い、終わったらすぐに削除してください。" />
+                    <CheckBox IsChecked="{Binding CsvAcknowledged}" Content="平文で保存されることを理解しました" />
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="確認のためマスターパスワードを入力" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox PasswordChar="●" Text="{Binding CsvPassword}" />
+                            <Button Grid.Column="1" Classes="danger" Content="書き出す…" IsEnabled="{Binding !IsBusy}" Command="{Binding ExportCsvCommand}" />
+                        </Grid>
+                    </StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="{Binding CsvStatus}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

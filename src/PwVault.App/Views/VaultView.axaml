@@ -1,0 +1,215 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             xmlns:core="using:PwVault.Core"
+             x:Class="PwVault.App.Views.VaultView"
+             x:DataType="vm:VaultViewModel">
+
+    <!-- NFR-09 キーボードショートカット -->
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusSearchCommand}" />
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding NewEntryCommand}" />
+        <KeyBinding Gesture="Ctrl+E" Command="{Binding EditEntryCommand}" />
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding CopyUsernameCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPasswordCommand}" />
+        <KeyBinding Gesture="Ctrl+G" Command="{Binding ShowGeneratorCommand}" />
+    </UserControl.KeyBindings>
+
+    <Panel>
+        <DockPanel>
+            <!-- ツールバー -->
+            <Border DockPanel.Dock="Top" Padding="12,10" Background="{DynamicResource CardBackground}"
+                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                    <TextBlock Classes="h2" VerticalAlignment="Center" Text="🔐 PwVault" />
+                    <TextBox Grid.Column="1" x:Name="SearchBox" MaxWidth="520" HorizontalAlignment="Stretch"
+                             PlaceholderText="検索（タイトル・ユーザーID・URL・タグ） Ctrl+F"
+                             Text="{Binding SearchText}" IsEnabled="{Binding !HasSubPage}" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                        <Button Classes="accent" Content="＋ 新規" ToolTip.Tip="新しいエントリ (Ctrl+N)" Command="{Binding NewEntryCommand}" />
+                        <Button Content="生成" ToolTip.Tip="パスワード生成 (Ctrl+G)" Command="{Binding ShowGeneratorCommand}" />
+                        <Button Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
+                        <Button Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
+                        <Button Content="設定" Command="{Binding ShowSettingsCommand}" />
+                        <Button Content="🔒 ロック" ToolTip.Tip="ロック (Ctrl+L)" Command="{Binding LockCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ステータスバー -->
+            <Border DockPanel.Dock="Bottom" Padding="12,6" Background="{DynamicResource CardBackground}"
+                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+                    <TextBlock FontSize="12" Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    <TextBlock Grid.Column="1" FontSize="12" Classes="success" Text="{Binding ClipboardStatus}" TextWrapping="NoWrap" />
+                    <TextBlock Grid.Column="2" FontSize="12" Classes="muted" Text="{Binding CountText}" TextWrapping="NoWrap" />
+                </Grid>
+            </Border>
+
+            <Panel>
+                <!-- S7〜S9 -->
+                <ContentControl Content="{Binding SubPage}" IsVisible="{Binding HasSubPage}" />
+
+                <!-- S3 一覧 + S4 詳細 / S5 編集 -->
+                <Grid ColumnDefinitions="340,*" IsVisible="{Binding !HasSubPage}">
+                    <DockPanel Margin="12,12,6,12">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,*" ColumnSpacing="6" Margin="0,0,0,8">
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FilterOption">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SortOption">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <Border Classes="card" Padding="4">
+                            <Panel>
+                                <TextBlock Classes="muted" Margin="16" HorizontalAlignment="Center" TextAlignment="Center"
+                                           IsVisible="{Binding !Items.Count}"
+                                           Text="エントリがありません。&#x0a;「＋ 新規」または「取込/書出」から追加できます。" />
+                                <ListBox x:Name="EntryList" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
+                                         Background="Transparent">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:EntryItemViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Width="32" Height="32" CornerRadius="16" Background="{DynamicResource AvatarBackground}">
+                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource AvatarForeground}" Text="{Binding Initial}" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Classes="muted" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="⚠" Classes="warning" IsVisible="{Binding HasWarning}" ToolTip.Tip="{Binding WarningText}" />
+                                                    <TextBlock Text="★" Classes="warning" IsVisible="{Binding IsFavorite}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Panel>
+                        </Border>
+                    </DockPanel>
+
+                    <Panel Grid.Column="1" Margin="6,12,12,12">
+                        <!-- 編集 -->
+                        <ContentControl Content="{Binding Editor}" IsVisible="{Binding IsEditing}" />
+
+                        <!-- 未選択 -->
+                        <Border Classes="card">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="!HasSelection" />
+                                    <Binding Path="!IsEditing" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                                       Text="左の一覧からエントリを選んでください&#x0a;&#x0a;Ctrl+F 検索 ・ Ctrl+N 新規 ・ Ctrl+B ユーザーIDをコピー&#x0a;Ctrl+Shift+C パスワードをコピー ・ Ctrl+E 編集 ・ Ctrl+L ロック" />
+                        </Border>
+
+                        <!-- S4 詳細 -->
+                        <Border Classes="card" Padding="0">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="HasSelection" />
+                                    <Binding Path="!IsEditing" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <ScrollViewer>
+                                <StackPanel Spacing="18" Margin="24">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBlock Classes="h1" Text="{Binding SelectedItem.Title}" TextWrapping="Wrap" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                            <ToggleButton Classes="icon" Content="★" ToolTip.Tip="お気に入り"
+                                                          IsChecked="{Binding SelectedItem.IsFavorite, Mode=OneWay}"
+                                                          Command="{Binding ToggleFavoriteCommand}" />
+                                            <Button Content="編集" ToolTip.Tip="Ctrl+E" Command="{Binding EditEntryCommand}" />
+                                            <Button Classes="danger" Content="ゴミ箱へ" Command="{Binding TrashEntryCommand}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Classes="warning" IsVisible="{Binding SelectedItem.HasWarning}"
+                                               Text="{Binding SelectedItem.WarningText, StringFormat='⚠ {0}。パスワードの変更をおすすめします。'}" />
+
+                                    <StackPanel>
+                                        <TextBlock Classes="label" Text="ユーザーID" />
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <TextBox IsReadOnly="True" Text="{Binding SelectedItem.Entry.Data.Username}" />
+                                            <Button Grid.Column="1" Content="コピー" ToolTip.Tip="Ctrl+B" Command="{Binding CopyUsernameCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel>
+                                        <TextBlock Classes="label" Text="パスワード" />
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                            <TextBox IsReadOnly="True" PasswordChar="●" FontFamily="Consolas, monospace"
+                                                     RevealPassword="{Binding RevealPassword}"
+                                                     Text="{Binding SelectedItem.Entry.Data.Password}" />
+                                            <ToggleButton Grid.Column="1" Content="表示" IsChecked="{Binding RevealPassword}" />
+                                            <Button Grid.Column="2" Content="コピー" ToolTip.Tip="Ctrl+Shift+C" Command="{Binding CopyPasswordCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel>
+                                        <TextBlock Classes="label" Text="URL" />
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                            <TextBox IsReadOnly="True" Text="{Binding SelectedItem.Entry.Data.Url}" />
+                                            <Button Grid.Column="1" Content="開く" IsEnabled="{Binding SelectedItem.HasUrl}" Command="{Binding OpenUrlCommand}" />
+                                            <Button Grid.Column="2" Content="コピー" Command="{Binding CopyUrlCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel>
+                                        <TextBlock Classes="label" Text="タグ" />
+                                        <TextBlock Text="{Binding SelectedItem.TagsText}" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <StackPanel>
+                                        <TextBlock Classes="label" Text="メモ" />
+                                        <SelectableTextBlock Text="{Binding SelectedItem.Entry.Data.Notes}" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="24">
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding SelectedItem.CreatedText, StringFormat='作成: {0}'}" />
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding SelectedItem.UpdatedText, StringFormat='更新: {0}'}" />
+                                    </StackPanel>
+
+                                    <!-- FR-15 パスワード変更履歴 -->
+                                    <Expander Header="パスワード変更履歴" IsVisible="{Binding SelectedItem.HasHistory}" HorizontalAlignment="Stretch">
+                                        <ItemsControl ItemsSource="{Binding SelectedItem.Entry.Data.History}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="core:PasswordHistoryItem">
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                        <TextBlock VerticalAlignment="Center" FontSize="12"
+                                                                   Text="{Binding ChangedAt, StringFormat='{}{0:yyyy/MM/dd HH:mm} まで使用'}" />
+                                                        <Button Grid.Column="1" Content="コピー"
+                                                                Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).CopyHistoryCommand}"
+                                                                CommandParameter="{Binding}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Panel>
+                </Grid>
+            </Panel>
+        </DockPanel>
+
+        <!-- S6 パスワード生成（オーバーレイ） -->
+        <Panel IsVisible="{Binding Generator, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Background="{DynamicResource OverlayBackground}">
+            <ContentControl Content="{Binding Generator}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Panel>
+    </Panel>
+</UserControl>

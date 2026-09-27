@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.UnlockView"
+             x:DataType="vm:UnlockViewModel">
+    <ScrollViewer>
+        <Border Classes="card" Width="480" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel Spacing="16">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="h1" Text="🔒 ロック中" />
+                    <TextBlock Classes="muted" FontSize="12" Text="{Binding VaultPath}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel>
+                    <TextBlock Classes="label" Text="マスターパスワード" />
+                    <TextBox x:Name="PasswordBox" PasswordChar="●" Text="{Binding Password}"
+                             IsEnabled="{Binding !IsBusy}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding UnlockCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                </StackPanel>
+
+                <TextBlock Classes="error" Text="{Binding Error}"
+                           IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Classes="success" Text="{Binding Info}"
+                           IsVisible="{Binding Info, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <!-- 破損時のバックアップ復元案内（NFR-06） -->
+                <Border IsVisible="{Binding ShowBackupHelp}" Background="{DynamicResource PaneBackground}"
+                        CornerRadius="6" Padding="12">
+                    <StackPanel Spacing="8">
+                        <TextBlock FontWeight="SemiBold" Text="バックアップから復元" />
+                        <TextBlock Classes="muted" FontSize="12" IsVisible="{Binding !Backups.Count}"
+                                   Text="この保管庫のバックアップ（.bak ファイル）が見つかりません。別の場所に保存した暗号化バックアップがあれば「別の保管庫を開く」から開いてください。" />
+                        <ItemsControl ItemsSource="{Binding Backups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BackupItem">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                        <TextBlock VerticalAlignment="Center" FontSize="12" Text="{Binding Display}" />
+                                        <Button Grid.Column="1" Content="これで復元"
+                                                Command="{Binding $parent[UserControl].((vm:UnlockViewModel)DataContext).RestoreBackupCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="別の保管庫を開く…" Command="{Binding OpenOtherCommand}" />
+                        <Button Content="新規作成" Command="{Binding CreateNewCommand}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsBusy}" />
+                        <Button Classes="accent" Content="アンロック" IsEnabled="{Binding !IsBusy}"
+                                Command="{Binding UnlockCommand}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+</UserControl>

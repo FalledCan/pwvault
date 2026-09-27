@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.TrashView"
+             x:DataType="vm:TrashViewModel">
+    <DockPanel Margin="24">
+        <StackPanel DockPanel.Dock="Top" Spacing="8" MaxWidth="720" Margin="0,0,0,16">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="h1" Text="ゴミ箱" />
+                <Button Grid.Column="1" Classes="danger" Content="ゴミ箱を空にする" IsEnabled="{Binding !IsEmpty}" Command="{Binding EmptyTrashCommand}" />
+                <Button Grid.Column="2" Content="← 一覧に戻る" Command="{Binding BackCommand}" />
+            </Grid>
+            <TextBlock Classes="success" Text="{Binding Status}" />
+        </StackPanel>
+
+        <Border Classes="card" MaxWidth="720" Padding="8" VerticalAlignment="Top">
+            <Panel>
+                <TextBlock Classes="muted" Margin="16" HorizontalAlignment="Center" IsVisible="{Binding IsEmpty}" Text="ゴミ箱は空です。" />
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TrashItem">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="8,6">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding TrashedAt, StringFormat='{}{0} に削除'}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="元に戻す"
+                                            Command="{Binding $parent[UserControl].((vm:TrashViewModel)DataContext).RestoreCommand}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Grid.Column="2" Classes="danger" Content="完全に削除"
+                                            Command="{Binding $parent[UserControl].((vm:TrashViewModel)DataContext).PurgeCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.GeneratorView"
+             x:DataType="vm:GeneratorViewModel">
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+    </UserControl.KeyBindings>
+
+    <Border Classes="card" Width="520">
+        <StackPanel Spacing="14">
+            <TextBlock Classes="h2" Text="パスワード生成" />
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox IsReadOnly="True" FontFamily="Consolas, monospace" FontSize="16" TextWrapping="Wrap"
+                         Text="{Binding Generated}" />
+                <Button Grid.Column="1" Content="↻" ToolTip.Tip="作り直す" Command="{Binding RegenerateCommand}" />
+            </Grid>
+            <TextBlock Classes="muted" FontSize="12" Text="{Binding InfoText}" />
+
+            <StackPanel>
+                <TextBlock Classes="label" Text="{Binding Length, StringFormat='長さ: {0:0} 文字'}" />
+                <Slider Minimum="{Binding MinLength}" Maximum="{Binding MaxLength}" Value="{Binding Length}"
+                        TickFrequency="1" IsSnapToTickEnabled="True" />
+            </StackPanel>
+
+            <UniformGrid Columns="2">
+                <CheckBox Content="大文字 (A-Z)" IsChecked="{Binding Uppercase}" />
+                <CheckBox Content="小文字 (a-z)" IsChecked="{Binding Lowercase}" />
+                <CheckBox Content="数字 (0-9)" IsChecked="{Binding Digits}" />
+                <CheckBox Content="記号 (!#$%…)" IsChecked="{Binding Symbols}" />
+            </UniformGrid>
+            <CheckBox Content="紛らわしい文字を除く（I l 1 | O 0 o）" IsChecked="{Binding ExcludeAmbiguous}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Content="閉じる" Command="{Binding CloseCommand}" />
+                <Button Content="コピー" Command="{Binding CopyCommand}" />
+                <Button Classes="accent" Content="このパスワードを使う" IsVisible="{Binding CanAccept}" Command="{Binding AcceptCommand}" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
