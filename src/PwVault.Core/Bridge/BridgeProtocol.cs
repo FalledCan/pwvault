@@ -15,6 +15,9 @@ public sealed class BridgeRequest
     public const string TypeFill = "fill";
     public const string TypeIcon = "icon";
 
+    /// <summary>PwVault の画面（ロック中ならアンロック画面）を前に出す。起動していなければ中継が起動する。</summary>
+    public const string TypeOpen = "open";
+
     public string? Type { get; set; }
     public string? Url { get; set; }
     public string? Id { get; set; }
@@ -36,6 +39,9 @@ public sealed class BridgeResponse
     public List<BridgeEntry>? Entries { get; set; }
     public string? Username { get; set; }
     public string? Password { get; set; }
+
+    /// <summary>open のとき、PwVault が起動していなかったので中継が起動した。</summary>
+    public bool? Started { get; set; }
 
     public static BridgeResponse Fail(string error) => new() { Ok = false, Error = error };
 }
@@ -134,7 +140,7 @@ public static class BridgeHandler
         if (request?.Type is null)
             return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
 
-        if (request.Type == BridgeRequest.TypeStatus)
+        if (request.Type is BridgeRequest.TypeStatus or BridgeRequest.TypeOpen)
             return new BridgeResponse { Ok = true, Unlocked = entries is not null };
 
         if (entries is null)

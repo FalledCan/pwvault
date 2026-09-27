@@ -131,8 +131,12 @@ public sealed class Harness : IDisposable
     public PwVault.App.Bridge.BrowserIntegration Integration { get; }
     public string RegistryBase { get; } = @"Software\PwVaultTest\" + Guid.NewGuid().ToString("N");
 
+    /// <summary>自動起動の登録先もテスト用（本物の Run キー・LaunchAgents には触らない）。</summary>
+    public AutoStart AutoStart { get; }
+
     public Harness(Action<AppSettings>? configure = null)
     {
+        AutoStart = new AutoStart(RegistryBase + @"\Run", Path.Combine(Dir, "LaunchAgents"));
         Integration = new PwVault.App.Bridge.BrowserIntegration(Path.Combine(Dir, "localappdata"), RegistryBase,
             macSupportRoot: Path.Combine(Dir, "Library", "Application Support"));
         Directory.CreateDirectory(Dir);
@@ -147,7 +151,8 @@ public sealed class Harness : IDisposable
         Window = new MainWindow { Width = 1100, Height = 720 };
         // テストでは通信しない（アイコンは Icons に積んだものだけ返す）・ブラウザも開かない
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
-            new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock);
+            new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock,
+            AutoStart);
         Main.OpenInBrowser = OpenedUrls.Add;
         Window.DataContext = Main;
         Window.Show();

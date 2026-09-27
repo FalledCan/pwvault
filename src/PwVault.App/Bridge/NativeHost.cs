@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using PwVault.Core.Bridge;
 
 namespace PwVault.App.Bridge;
@@ -22,7 +24,11 @@ public static class NativeHost
         args.Any(a => a.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase)
                       || string.Equals(a, FirefoxExtensionId, StringComparison.OrdinalIgnoreCase));
 
-    public static async Task<int> RunAsync(Stream stdin, Stream stdout, string pipeName, TimeSpan connectTimeout)
+    /// <param name="launchApp">
+    /// open の要求で PwVault が起動していなかったときに起動する処理（テストでは差し替える）。省略時は <see cref="LaunchApp"/>。
+    /// </param>
+    public static async Task<int> RunAsync(Stream stdin, Stream stdout, string pipeName, TimeSpan connectTimeout,
+        Action? launchApp = null)
     {
         byte[]? request;
         try
@@ -34,6 +40,12 @@ public static class NativeHost
             return 1;
         }
         if (request is null) return 0;
+
+        var isOpen = BridgeMessage.ParseRequest(request)?.Type == BridgeRequest.TypeOpen;
+        // Windows は、前面にないプロセスが自分のウィンドウを前に出すことを制限している。
+        // 中継はブラウザ（前面のプロセス）から起動されているので、ここで PwVault 本体に「前に出てよい」許可を渡す
+        if (isOpen && OperatingSystem.IsWindows())
+            AllowSetForegroundWindow(ASFW_ANY);
 
         byte[] response;
         try
@@ -51,11 +63,55 @@ public static class NativeHost
         catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or IOException
                                        or UnauthorizedAccessException or InvalidDataException)
         {
-            // PwVault が起動していない、またはブラウザ連携が止まっている
-            response = BridgeMessage.Serialize(BridgeResponse.Fail(BridgeResponse.ErrorNotRunning));
+            // PwVault が起動していない、またはブラウザ連携が止まっている。「開く」なら起動する
+            if (isOpen)
+            {
+                try
+                {
+                    (launchApp ?? LaunchApp)();
+                    response = BridgeMessage.Serialize(new BridgeResponse { Ok = true, Unlocked = false, Started = true });
+                }
+                catch (Exception launchError) when (launchError is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+                {
+                    response = BridgeMessage.Serialize(BridgeResponse.Fail(BridgeResponse.ErrorNotRunning));
+                }
+            }
+            else
+            {
+                response = BridgeMessage.Serialize(BridgeResponse.Fail(BridgeResponse.ErrorNotRunning));
+            }
         }
 
         await BridgeMessage.WriteFrameAsync(stdout, response);
         return 0;
     }
+
+    /// <summary>
+    /// PwVault 本体（UI）を起動する。ブラウザは中継を終わらせるときに子プロセスも一緒に終わらせることがあるので、
+    /// Windows はエクスプローラー、macOS は open コマンド経由で、中継とは切り離して起動する。
+    /// </summary>
+    public static void LaunchApp()
+    {
+        var exe = Environment.ProcessPath ?? throw new InvalidOperationException("実行ファイルの場所が分かりません。");
+        if (OperatingSystem.IsWindows())
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{exe}\"") { UseShellExecute = false });
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            // …/PwVault.app/Contents/MacOS/PwVault → …/PwVault.app
+            var bundle = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(exe)!, "..", ".."));
+            var target = bundle.EndsWith(".app", StringComparison.Ordinal) ? bundle : exe;
+            Process.Start(new ProcessStartInfo("open", ["-a", target]) { UseShellExecute = false });
+        }
+        else
+        {
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
+        }
+    }
+
+    private const int ASFW_ANY = -1;
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int processId);
 }

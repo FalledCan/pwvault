@@ -44,8 +44,10 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel(AppSettingsStore store, ClipboardService clipboard, AutoLockService autoLock, IFileDialogs fileDialogs,
         BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
         UpdateService? updates = null,
-        IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null)
+        IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null,
+        AutoStart? autoStart = null)
     {
+        AutoStart = autoStart ?? (AutoStart.IsSupported ? new AutoStart() : null);
         QuickUnlock = quickUnlock ?? QuickUnlockProviders.CreateDefault();
         LocalDataDir = localDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PwVault");
         Clock = clock ?? TimeProvider.System;
@@ -67,6 +69,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (Settings.BrowserIntegration)
             ResumeBrowserIntegration();
+        RepairAutoStart();
     }
 
     // ------------------------------------------------------------------ Windows Hello（クイックアンロック）
@@ -232,6 +235,30 @@ public partial class MainViewModel : ViewModelBase
         UpdateStatus = null;
     }
 
+    /// <summary>ウィンドウを前に出してほしい（App が受けて表示する）。</summary>
+    public event EventHandler? ShowRequested;
+
+    // ------------------------------------------------------------------ 自動起動
+
+    public AutoStart? AutoStart { get; }
+
+    public bool IsAutoStartEnabled => AutoStart?.IsEnabled() == true;
+
+    public void SetAutoStart(bool enabled)
+    {
+        if (AutoStart is null) return;
+        if (enabled) AutoStart.Enable(ExePath);
+        else AutoStart.Disable();
+    }
+
+    /// <summary>自動起動の登録が別の場所の実行ファイルを指していたら（移動した等）、今の場所に直す。</summary>
+    private void RepairAutoStart()
+    {
+        if (AutoStart is null || !AutoStart.IsEnabled() || AutoStart.IsEnabledFor(ExePath)) return;
+        try { AutoStart.Enable(ExePath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
+    }
+
     // ------------------------------------------------------------------ ブラウザ連携
 
     private readonly string? _bridgePipeName;
@@ -286,6 +313,10 @@ public partial class MainViewModel : ViewModelBase
     internal Task<BridgeResponse> HandleBridgeRequestAsync(BridgeRequest? request) =>
         Dispatcher.UIThread.InvokeAsync(() =>
         {
+            // ブラウザの「PwVault をアンロックする」から: ウィンドウを前に出す（ロック中ならアンロック画面）
+            if (request?.Type == BridgeRequest.TypeOpen)
+                ShowRequested?.Invoke(this, EventArgs.Empty);
+
             var vault = CurrentPage as VaultViewModel is { IsUnlocked: true } v ? v : null;
             return BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data));
         }).GetTask();

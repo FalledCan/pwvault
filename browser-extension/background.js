@@ -10,6 +10,7 @@ const menus = api.menus ?? api.contextMenus;
 const HOST = "com.pwvault.native";
 const ROOT = "pwvault-root";
 const REFRESH = "pwvault-refresh";
+const OPEN = "pwvault-open";
 const ENTRY_PREFIX = "pwvault-entry:";
 const CONTEXTS = ["editable"];
 const PAGES = ["http://*/*", "https://*/*"];
@@ -72,6 +73,13 @@ function rebuild(url, { force = false } = {}) {
         const title = e.username ? `${e.title}（${e.username}）` : e.title;
         await create({ id: ENTRY_PREFIX + e.id, parentId: ROOT, title: label(title) });
       }
+    } else if (response.error === "locked" || response.error === "not_running") {
+      // 押すと PwVault のアンロック画面を前に出す（起動していなければ起動する）。
+      // マスターパスワードはブラウザには入力させず、PwVault 本体に入力してもらう
+      await create({
+        id: OPEN, parentId: ROOT,
+        title: response.error === "locked" ? "🔒 PwVault をアンロックする…" : "PwVault を起動してアンロックする…",
+      });
     } else {
       await create({
         id: "pwvault-info", parentId: ROOT, enabled: false,
@@ -226,8 +234,34 @@ async function toast(tabId, message) {
   } catch { /* 通知すら出せないページ（ブラウザの内部ページなど）は諦める */ }
 }
 
+/**
+ * PwVault のアンロック画面を前に出し、アンロックされるまで様子を見て、されたらメニューを作り直す
+ * （利用者がブラウザに戻って右クリックしたときには候補が並んでいるように）。
+ */
+let watching = null;
+async function openAndWatch(tab) {
+  const response = await send({ type: "open" });
+  if (!response.ok) return toast(tab.id, errorText(response.error));
+  if (response.unlocked) return rebuild(tab.url, { force: true });
+
+  if (watching) clearInterval(watching);
+  const started = Date.now();
+  watching = setInterval(async () => {
+    const status = await send({ type: "status" });
+    if (status.ok && status.unlocked) {
+      clearInterval(watching);
+      watching = null;
+      await rebuild(tab.url, { force: true });
+    } else if (Date.now() - started > 120_000) {
+      clearInterval(watching); // 2 分待ってもアンロックされなければやめる
+      watching = null;
+    }
+  }, 1500);
+}
+
 async function handleClick(info, tab) {
   if (info.menuItemId === REFRESH) return rebuild(tab?.url, { force: true });
+  if (info.menuItemId === OPEN && tab) return openAndWatch(tab);
   if (typeof info.menuItemId !== "string" || !info.menuItemId.startsWith(ENTRY_PREFIX) || !tab) return;
 
   const id = info.menuItemId.slice(ENTRY_PREFIX.length);
@@ -235,6 +269,11 @@ async function handleClick(info, tab) {
   if (!isWebUrl(frameUrl)) return toast(tab.id, "このページでは使えません。");
 
   const response = await send({ type: "fill", url: frameUrl, id });
+  if (!response.ok && response.error === "locked") {
+    // メニューを出した後に自動ロックされていた。アンロック画面を出す
+    await toast(tab.id, "PwVault がロックされたので、アンロック画面を開きました。アンロック後にもう一度選んでください。");
+    return openAndWatch(tab);
+  }
   if (!response.ok) {
     const message = response.error === "no_match"
       ? "このエントリはこのサイト用ではないため入力しませんでした。"
@@ -285,4 +324,4 @@ if (menus.onShown && menus.refresh) {
 }
 
 // E2E テスト用の入口（テストが DevTools から呼ぶ）
-globalThis.__pwvault = { state, rebuild, handleClick, fillCredentials };
+globalThis.__pwvault = { state, rebuild, handleClick, fillCredentials, openAndWatch };

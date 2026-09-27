@@ -29,6 +29,7 @@ public partial class SettingsViewModel : ViewModelBase
         DoubleClickOpensUrl = s.DoubleClickOpensUrl;
         CloseToTray = s.CloseToTray;
         CheckForUpdates = s.CheckForUpdates;
+        AutoStartEnabled = owner.Main.IsAutoStartEnabled;
         QuickUnlockDays = s.QuickUnlockDays;
         QuickUnlockEnabled = owner.Main.IsQuickUnlockEnrolled(owner.Vault.VaultId);
         _loaded = true;
@@ -67,6 +68,25 @@ public partial class SettingsViewModel : ViewModelBase
         if (!_loaded) return;
         _owner.Main.Settings.CloseToTray = value;
         _owner.Main.SaveSettings();
+    }
+
+    // 自動起動は設定ファイルではなく、OS への実際の登録状態を表示・変更する
+    public bool AutoStartSupported => _owner.Main.AutoStart is not null;
+    [ObservableProperty] public partial bool AutoStartEnabled { get; set; }
+    [ObservableProperty] public partial string? AutoStartStatus { get; set; }
+
+    partial void OnAutoStartEnabledChanged(bool value)
+    {
+        if (!_loaded) return;
+        try
+        {
+            _owner.Main.SetAutoStart(value);
+            AutoStartStatus = value ? "次回のサインインから、通知領域に隠れた状態で起動します。" : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or PlatformNotSupportedException)
+        {
+            AutoStartStatus = "設定を変更できませんでした: " + ex.Message;
+        }
     }
 
     // ---- Windows Hello

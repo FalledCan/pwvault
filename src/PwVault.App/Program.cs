@@ -12,6 +12,9 @@ sealed class Program
     /// <summary>更新して再起動したときに新しいプロセスへ渡す引数。</summary>
     internal const string AfterUpdateArgument = "--after-update";
 
+    /// <summary>サインイン時の自動起動など、ウィンドウを出さずに通知領域だけで起動するか。</summary>
+    internal static bool StartInBackground { get; private set; }
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -36,6 +39,7 @@ sealed class Program
             return 0;
         }
         Instance = instance;
+        StartInBackground = args.Contains(AutoStart.BackgroundArgument);
 
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

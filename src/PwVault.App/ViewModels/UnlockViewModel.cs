@@ -55,6 +55,21 @@ public partial class UnlockViewModel : ViewModelBase
         }
     }
 
+    private DateTimeOffset _lastAutoPrompt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// 画面が出たとき・ウィンドウが前に出たときに、Windows Hello の確認を自動で出す。
+    /// 取り消した直後にウィンドウを行き来するたび出ないよう、10 秒は間を空ける。
+    /// </summary>
+    public void TryAutoQuickUnlock()
+    {
+        if (!CanQuickUnlock || IsBusy) return;
+        var now = _main.Clock.GetUtcNow();
+        if (now - _lastAutoPrompt < TimeSpan.FromSeconds(10)) return;
+        _lastAutoPrompt = now;
+        QuickUnlockCommand.Execute(null);
+    }
+
     [RelayCommand]
     private async Task QuickUnlockAsync()
     {

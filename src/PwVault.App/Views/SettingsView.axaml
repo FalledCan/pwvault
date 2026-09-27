@@ -40,6 +40,13 @@
                         <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
                                    Text="ブラウザ連携で受け取れなかったアイコンを、PwVault が各サイト（例: example.com）に直接取りに行きます。問い合わせ先はそのサイト自身だけで、クッキーは送りません。オフにすると PwVault は一切通信しません。取得したアイコンは保管庫の鍵で暗号化して保存します。" />
                     </StackPanel>
+                    <StackPanel IsVisible="{Binding AutoStartSupported}">
+                        <CheckBox IsChecked="{Binding AutoStartEnabled}" Content="PC にサインインしたら自動で起動する" />
+                        <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
+                                   Text="ウィンドウは出さず、通知領域（Mac はメニューバー）に隠れた状態で起動します。ブラウザ拡張の「PwVault をアンロックする」や通知領域のアイコンから開けます。" />
+                        <TextBlock Classes="success" FontSize="12" Margin="28,2,0,0" Text="{Binding AutoStartStatus}"
+                                   IsVisible="{Binding AutoStartStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
                     <CheckBox IsChecked="{Binding DoubleClickOpensUrl}" Content="一覧をダブルクリックしてサイトを開く" />
                     <StackPanel>
                         <CheckBox IsChecked="{Binding CloseToTray}" Content="×ボタンで閉じずに通知領域（Windows はタスクトレイ、Mac はメニューバー）に隠す" />

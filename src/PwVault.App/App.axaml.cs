@@ -25,8 +25,17 @@ public partial class App : Application
             var clipboard = new ClipboardService(() => window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
             var main = new MainViewModel(new AppSettingsStore(), clipboard, new AutoLockService(), window);
             window.DataContext = main;
-            desktop.MainWindow = window;
             main.OwnerWindowHandle = () => window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+            // サインイン時の自動起動（--background）では、ウィンドウを出さずに通知領域だけで始める。
+            // そのため終了はウィンドウではなく明示的に行う（×で本当に閉じたとき・「終了」・更新での再起動）
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            window.Closed += (_, _) => desktop.Shutdown();
+            if (!Program.StartInBackground)
+                desktop.MainWindow = window;
+
+            // ブラウザ拡張の「PwVault をアンロックする」から呼ばれたら前に出す
+            main.ShowRequested += (_, _) => ShowWindow(window);
 
             // 更新: 前回の入れ替えで残った古い exe を消し、定期的な確認を始める。入れ替えたら終了して新しい exe に任せる
             UpdateService.CleanupAfterUpdate(MainViewModel.ExePath);
