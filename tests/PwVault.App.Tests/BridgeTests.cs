@@ -14,6 +14,8 @@ public class BridgeTests
 {
     private const string Master = "correct horse battery staple";
 
+    private static string TestPipe() => Harness.TestPipe();
+
     /// <summary>ブラウザが中継を起動したときと同じく、標準入力に 1 メッセージを入れて中継を 1 回動かす。</summary>
     private static async Task<BridgeResponse> AskViaNativeHost(string pipeName, BridgeRequest request)
     {
@@ -48,7 +50,7 @@ public class BridgeTests
     [AvaloniaFact]
     public async Task NativeHost_WhenAppNotRunning_ReportsNotRunning()
     {
-        var r = await AskViaNativeHost("PwVault.Test.nobody." + Guid.NewGuid().ToString("N"), new BridgeRequest { Type = "status" });
+        var r = await AskViaNativeHost(TestPipe(), new BridgeRequest { Type = "status" });
         Assert.False(r.Ok);
         Assert.Equal(BridgeResponse.ErrorNotRunning, r.Error);
     }
@@ -56,7 +58,7 @@ public class BridgeTests
     [AvaloniaFact]
     public async Task Server_RejectsUntrustedClient()
     {
-        var pipe = "PwVault.Test." + Guid.NewGuid().ToString("N");
+        var pipe = TestPipe();
         await using var server = new BridgeServer(_ => Task.FromResult(new BridgeResponse { Ok = true }), pipe, isTrustedClient: _ => false);
         var r = await AskViaNativeHost(pipe, new BridgeRequest { Type = "status" });
         Assert.Equal(BridgeResponse.ErrorNotRunning, r.Error); // 応答せずに切られる
@@ -66,7 +68,7 @@ public class BridgeTests
     public async Task Server_Restart_DoesNotLeaveDeadPipe()
     {
         // 止めた窓口の待ち受けパイプが残っていると、そこに繋がった中継が応答待ちで固まる
-        var pipe = "PwVault.Test." + Guid.NewGuid().ToString("N");
+        var pipe = TestPipe();
         await (new BridgeServer(_ => Task.FromResult(new BridgeResponse { Ok = true }), pipe)).DisposeAsync();
         await using var server = new BridgeServer(_ => Task.FromResult(new BridgeResponse { Ok = true, Unlocked = true }), pipe);
 
@@ -80,7 +82,7 @@ public class BridgeTests
     public async Task Server_DefaultValidator_AcceptsSameExecutable()
     {
         // テストでは中継も同じプロセス（同じ exe）なので、既定の検査（接続元が自分と同じ exe か）を通る
-        var pipe = "PwVault.Test." + Guid.NewGuid().ToString("N");
+        var pipe = TestPipe();
         await using var server = new BridgeServer(_ => Task.FromResult(new BridgeResponse { Ok = true, Unlocked = true }), pipe);
         var r = await AskViaNativeHost(pipe, new BridgeRequest { Type = "status" });
         Assert.True(r.Ok);

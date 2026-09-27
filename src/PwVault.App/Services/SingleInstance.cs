@@ -22,9 +22,10 @@ public sealed class SingleInstance : IDisposable
     /// <param name="name">テスト用に名前を変えるとき。</param>
     public SingleInstance(TimeSpan waitForPrevious = default, string? name = null)
     {
-        var user = OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value : Environment.UserName;
         name ??= "PwVault";
-        _pipeName = $"{name}.Activate.{user}";
+        _pipeName = OperatingSystem.IsWindows()
+            ? $"{name}.Activate.{WindowsIdentity.GetCurrent().User?.Value}"
+            : Bridge.BridgeServer.UnixSocketPath($"{name}.activate.sock");
         _mutex = new Mutex(initiallyOwned: true, $@"Local\{name}.SingleInstance", out _owned);
         if (!_owned && waitForPrevious > TimeSpan.Zero)
         {
@@ -53,6 +54,7 @@ public sealed class SingleInstance : IDisposable
     /// <summary>合図を受けたら <paramref name="onActivate"/> を呼ぶ（別スレッドから呼ばれる）。</summary>
     public void ListenForActivation(Action onActivate)
     {
+        Bridge.BridgeServer.RemoveStaleSocket(_pipeName);
         var ct = _cts.Token;
         _ = Task.Run(async () =>
         {

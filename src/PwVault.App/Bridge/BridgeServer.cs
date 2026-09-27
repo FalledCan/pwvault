@@ -28,12 +28,36 @@ public sealed partial class BridgeServer : IAsyncDisposable
         _handle = handle;
         _isTrustedClient = isTrustedClient ?? IsSameExecutable;
         PipeName = pipeName ?? DefaultPipeName;
+        RemoveStaleSocket(PipeName);
         _loop = Task.Run(() => AcceptLoopAsync(_cts.Token));
     }
 
-    /// <summary>ユーザーごとに別のパイプ名にする（同じ PC の別ユーザーと衝突しないように）。</summary>
+    /// <summary>
+    /// ユーザーごとに別のパイプ名にする（同じ PC の別ユーザーと衝突しないように）。
+    /// macOS ではソケットファイルの場所を、利用者のフォルダ内の決まった場所にする
+    /// （既定の一時フォルダは起動のされ方で変わりうる上、パスの長さに 104 文字の上限があるため）。
+    /// </summary>
     public static string DefaultPipeName =>
-        "PwVault.Bridge." + (OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value : Environment.UserName);
+        OperatingSystem.IsWindows() ? "PwVault.Bridge." + WindowsIdentity.GetCurrent().User?.Value
+        : UnixSocketPath("bridge.sock");
+
+    /// <summary>macOS: ~/Library/Application Support/PwVault/&lt;name&gt;（フォルダは本人だけが読み書きできる）。</summary>
+    internal static string UnixSocketPath(string name)
+    {
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "PwVault");
+        Directory.CreateDirectory(dir);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return Path.Combine(dir, name);
+    }
+
+    /// <summary>前回の異常終了で残ったソケットファイルを消す（多重起動は防いでいるので、残っていれば使われていない）。</summary>
+    internal static void RemoveStaleSocket(string pipeName)
+    {
+        if (OperatingSystem.IsWindows() || !Path.IsPathRooted(pipeName)) return;
+        try { File.Delete(pipeName); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
 
     private async Task AcceptLoopAsync(CancellationToken ct)
     {

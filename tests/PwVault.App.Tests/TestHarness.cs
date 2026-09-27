@@ -118,8 +118,14 @@ public sealed class Harness : IDisposable
     /// <summary>進められる時計。</summary>
     public MutableClock Clock { get; } = new();
 
+    /// <summary>
+    /// テスト用のパイプ名を作る。本物の PwVault と衝突しないように毎回変える。
+    /// macOS ではパイプが一時フォルダ内のソケットファイルになり、パス全体が 104 文字以内でなければならないので短くする。
+    /// </summary>
+    public static string TestPipe() => "pwvt" + Guid.NewGuid().ToString("N")[..10];
+
     /// <summary>テスト用のパイプ名（本物の PwVault と衝突しないように毎回変える）。</summary>
-    public string PipeName { get; } = "PwVault.Test." + Guid.NewGuid().ToString("N");
+    public string PipeName { get; } = TestPipe();
 
     /// <summary>レジストリはテスト用のキー、ファイルは一時フォルダに書く。</summary>
     public PwVault.App.Bridge.BrowserIntegration Integration { get; }
