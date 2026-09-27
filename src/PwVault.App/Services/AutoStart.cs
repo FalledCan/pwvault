@@ -35,7 +35,10 @@ public sealed class AutoStart
     public bool IsEnabled() => RegisteredCommand() is not null;
 
     /// <summary>登録されていて、今の実行ファイルを指しているか。</summary>
-    public bool IsEnabledFor(string exePath) => RegisteredCommand() is { } cmd && cmd.Contains(exePath, StringComparison.Ordinal);
+    public bool IsEnabledFor(string exePath) =>
+        RegisteredCommand() is { } cmd && cmd.Contains(
+            OperatingSystem.IsWindows() ? $"\"{exePath}\"" : $"<string>{SecurityElement.Escape(exePath)}</string>",
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     public void Enable(string exePath)
     {
