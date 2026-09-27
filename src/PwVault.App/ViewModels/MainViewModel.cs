@@ -58,7 +58,7 @@ public partial class MainViewModel : ViewModelBase
         FileDialogs = fileDialogs;
         AutoLock.IdleMinutes = Settings.AutoLockMinutes;
         AutoLock.LockRequested += (_, _) => Lock();
-        BrowserIntegration = browserIntegration ?? (OperatingSystem.IsWindows() ? new BrowserIntegration() : null);
+        BrowserIntegration = browserIntegration ?? (BrowserIntegration.IsSupported ? new BrowserIntegration() : null);
         _bridgePipeName = bridgePipeName;
 
         CurrentPage = Settings.VaultPath is { } path && File.Exists(path)
@@ -244,8 +244,8 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>ブラウザ連携を有効にする: レジストリ登録・拡張機能の展開・窓口の起動。</summary>
     public void EnableBrowserIntegration()
     {
-        if (BrowserIntegration is null || !OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("ブラウザ連携は Windows 専用です。");
+        if (BrowserIntegration is null)
+            throw new PlatformNotSupportedException("ブラウザ連携はこの OS には対応していません。");
 
         BrowserIntegration.Register(ExePath);
         Settings.BrowserIntegration = true;
@@ -256,8 +256,7 @@ public partial class MainViewModel : ViewModelBase
     public void DisableBrowserIntegration()
     {
         StopBridge();
-        if (OperatingSystem.IsWindows())
-            BrowserIntegration?.Unregister();
+        BrowserIntegration?.Unregister();
         Settings.BrowserIntegration = false;
         SaveSettings();
     }
@@ -265,9 +264,9 @@ public partial class MainViewModel : ViewModelBase
     private void ResumeBrowserIntegration()
     {
         // exe を移動していたら登録し直す（ブラウザが古い場所の exe を起動しようとして失敗しないように）
-        if (OperatingSystem.IsWindows() && BrowserIntegration?.GetStatus(ExePath) != IntegrationStatus.Registered)
+        if (BrowserIntegration is not null && BrowserIntegration.GetStatus(ExePath) != IntegrationStatus.Registered)
         {
-            try { BrowserIntegration?.Register(ExePath); }
+            try { BrowserIntegration.Register(ExePath); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
         StartBridge();

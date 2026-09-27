@@ -488,3 +488,8 @@ artifacts/
 *.pwv.bak*
 *.pwv.corrupt-*
 
+
+# macOS パッケージ作成の作業用
+out/
+dist/
+

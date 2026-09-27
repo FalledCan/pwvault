@@ -12,6 +12,7 @@ public partial class MainWindow : Window, IFileDialogs
     public MainWindow()
     {
         InitializeComponent();
+        PwVault.App.Services.Shortcuts.AdaptForPlatform(this);
 
         // 無操作の判定用。子要素が処理済みのイベントも拾えるようトンネルで受ける
         AddHandler(KeyDownEvent, OnActivity, RoutingStrategies.Tunnel, handledEventsToo: true);

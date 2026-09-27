@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:PwVault.App.ViewModels"
              xmlns:core="using:PwVault.Core"
+             xmlns:svc="using:PwVault.App.Services"
              x:Class="PwVault.App.Views.VaultView"
              x:DataType="vm:VaultViewModel">
 
@@ -23,15 +24,15 @@
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
                     <TextBlock Classes="h2" VerticalAlignment="Center" Text="🔐 PwVault" />
                     <TextBox Grid.Column="1" x:Name="SearchBox" MaxWidth="520" HorizontalAlignment="Stretch"
-                             PlaceholderText="検索（タイトル・ユーザーID・URL・タグ） Ctrl+F"
+                             PlaceholderText="{x:Static svc:Shortcuts.SearchPlaceholder}"
                              Text="{Binding SearchText}" IsEnabled="{Binding !HasSubPage}" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-                        <Button Classes="accent" Content="＋ 新規" ToolTip.Tip="新しいエントリ (Ctrl+N)" Command="{Binding NewEntryCommand}" />
-                        <Button Content="生成" ToolTip.Tip="パスワード生成 (Ctrl+G)" Command="{Binding ShowGeneratorCommand}" />
+                        <Button Classes="accent" Content="＋ 新規" ToolTip.Tip="{x:Static svc:Shortcuts.NewTip}" Command="{Binding NewEntryCommand}" />
+                        <Button Content="生成" ToolTip.Tip="{x:Static svc:Shortcuts.GenerateTip}" Command="{Binding ShowGeneratorCommand}" />
                         <Button Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
                         <Button Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
                         <Button Content="設定" Command="{Binding ShowSettingsCommand}" />
-                        <Button Content="🔒 ロック" ToolTip.Tip="ロック (Ctrl+L)" Command="{Binding LockCommand}" />
+                        <Button Content="🔒 ロック" ToolTip.Tip="{x:Static svc:Shortcuts.LockTip}" Command="{Binding LockCommand}" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -119,7 +120,7 @@
                                 </MultiBinding>
                             </Border.IsVisible>
                             <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
-                                       Text="左の一覧からエントリを選んでください&#x0a;&#x0a;Ctrl+F 検索 ・ Ctrl+N 新規 ・ Ctrl+B ユーザーIDをコピー&#x0a;Ctrl+Shift+C パスワードをコピー ・ Ctrl+E 編集 ・ Ctrl+L ロック" />
+                                       Text="{x:Static svc:Shortcuts.EmptyDetailHint}" />
                         </Border>
 
                         <!-- S4 詳細 -->
@@ -138,7 +139,7 @@
                                             <ToggleButton Classes="icon" Content="★" ToolTip.Tip="お気に入り"
                                                           IsChecked="{Binding SelectedItem.IsFavorite, Mode=OneWay}"
                                                           Command="{Binding ToggleFavoriteCommand}" />
-                                            <Button Content="編集" ToolTip.Tip="Ctrl+E" Command="{Binding EditEntryCommand}" />
+                                            <Button Content="編集" ToolTip.Tip="{x:Static svc:Shortcuts.Edit}" Command="{Binding EditEntryCommand}" />
                                             <Button Classes="danger" Content="ゴミ箱へ" Command="{Binding TrashEntryCommand}" />
                                         </StackPanel>
                                     </Grid>
@@ -150,7 +151,7 @@
                                         <TextBlock Classes="label" Text="ユーザーID" />
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                                             <TextBox IsReadOnly="True" Text="{Binding SelectedItem.Entry.Data.Username}" />
-                                            <Button Grid.Column="1" Content="コピー" ToolTip.Tip="Ctrl+B" Command="{Binding CopyUsernameCommand}" />
+                                            <Button Grid.Column="1" Content="コピー" ToolTip.Tip="{x:Static svc:Shortcuts.CopyUser}" Command="{Binding CopyUsernameCommand}" />
                                         </Grid>
                                     </StackPanel>
 
@@ -161,7 +162,7 @@
                                                      RevealPassword="{Binding RevealPassword}"
                                                      Text="{Binding SelectedItem.Entry.Data.Password}" />
                                             <ToggleButton Grid.Column="1" Content="表示" IsChecked="{Binding RevealPassword}" />
-                                            <Button Grid.Column="2" Content="コピー" ToolTip.Tip="Ctrl+Shift+C" Command="{Binding CopyPasswordCommand}" />
+                                            <Button Grid.Column="2" Content="コピー" ToolTip.Tip="{x:Static svc:Shortcuts.CopyPassword}" Command="{Binding CopyPasswordCommand}" />
                                         </Grid>
                                     </StackPanel>
 

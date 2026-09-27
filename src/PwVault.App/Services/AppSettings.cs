@@ -39,7 +39,9 @@ public sealed class AppSettings
     public int QuickUnlockDays { get; set; } = 14;
 
     public static string DefaultVaultPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
+        Path.Combine(OperatingSystem.IsMacOS()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents")
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PwVault", "vault.pwv");
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, UseStringEnumConverter = true)]

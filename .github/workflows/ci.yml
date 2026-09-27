@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +27,38 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ui-screenshots
+          name: ui-screenshots-windows
+          path: artifacts/screenshots
+          if-no-files-found: ignore
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+        env:
+          PWVAULT_SCREENSHOT_DIR: ${{ github.workspace }}/artifacts/screenshots
+
+      # 実際のクリップボードを使うテスト（CI の Mac なら利用者のクリップボードを気にしなくてよい）
+      - name: Test (macOS clipboard)
+        run: dotnet test tests/PwVault.App.Tests --configuration Release --no-build --explicit only --filter-class "*MacTests"
+
+      - name: Package (check only)
+        run: bash tools/package-macos.sh 0.0.0 arm64
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-screenshots-macos
           path: artifacts/screenshots
           if-no-files-found: ignore

@@ -87,31 +87,58 @@ public sealed partial class BridgeServer : IAsyncDisposable
         }
     }
 
+    /// <summary>接続元のプロセス ID（Windows: GetNamedPipeClientProcessId、macOS: ソケットの LOCAL_PEERPID）。</summary>
     private static int GetClientProcessId(NamedPipeServerStream pipe)
     {
-        if (!OperatingSystem.IsWindows()) return -1;
-        return GetNamedPipeClientProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? (int)pid : -1;
+        var handle = pipe.SafePipeHandle.DangerousGetHandle();
+        if (OperatingSystem.IsWindows())
+            return GetNamedPipeClientProcessId(handle, out var pid) ? (int)pid : -1;
+        if (OperatingSystem.IsMacOS())
+        {
+            const int SOL_LOCAL = 0, LOCAL_PEERPID = 2;
+            int peer = 0, size = sizeof(int);
+            return getsockopt((int)handle, SOL_LOCAL, LOCAL_PEERPID, ref peer, ref size) == 0 ? peer : -1;
+        }
+        return -1;
     }
 
-    /// <summary>接続元が、いま動いているのと同じ PwVault.exe（＝中継モード）かどうか。</summary>
-    private static bool IsSameExecutable(int pid)
+    /// <summary>接続元が、いま動いているのと同じ実行ファイル（＝中継モードの PwVault）かどうか。</summary>
+    internal static bool IsSameExecutable(int pid)
     {
         if (pid <= 0 || Environment.ProcessPath is not { } self) return false;
+        var path = ExecutablePathOf(pid);
+        return path is not null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(self),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static string? ExecutablePathOf(int pid)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            var buffer = new byte[4096];
+            var length = proc_pidpath(pid, buffer, (uint)buffer.Length);
+            return length > 0 ? System.Text.Encoding.UTF8.GetString(buffer, 0, length) : null;
+        }
         try
         {
             using var client = Process.GetProcessById(pid);
-            var path = client.MainModule?.FileName;
-            return path is not null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(self), StringComparison.OrdinalIgnoreCase);
+            return client.MainModule?.FileName;
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
-            return false;
+            return null;
         }
     }
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetNamedPipeClientProcessId(IntPtr pipe, out uint clientProcessId);
+
+    [LibraryImport("libc", SetLastError = true)]
+    private static partial int getsockopt(int socket, int level, int optionName, ref int optionValue, ref int optionLength);
+
+    [LibraryImport("/usr/lib/libproc.dylib")]
+    private static partial int proc_pidpath(int pid, [Out] byte[] buffer, uint bufferSize);
 
     public async ValueTask DisposeAsync()
     {

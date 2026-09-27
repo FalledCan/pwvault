@@ -1,6 +1,6 @@
 name: Release
 
-# v で始まるタグ（例: v0.1.0）を push すると、テスト → exe のビルド → 署名 → GitHub リリースへの添付 を行う
+# v で始まるタグ（例: v0.4.0）を push すると、Windows と macOS でテスト → ビルド → 署名 し、GitHub リリースに添付する
 on:
   push:
     tags: ['v*']
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,10 +44,52 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: dotnet run tools/sign-release.cs -- '${{ github.ref_name }}' $env:EXE
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: PwVault-*-win-x64.exe*
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test --configuration Release
+
+      - name: Package (Apple Silicon / Intel)
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          bash tools/package-macos.sh "$version" arm64
+          bash tools/package-macos.sh "$version" x64
+
+      - name: Sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: dotnet run tools/sign-release.cs -- "$GITHUB_REF_NAME" PwVault-*-osx-*.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos
+          path: PwVault-*-osx-*.zip*
+
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: files
+          merge-multiple: true
+
       - name: Create release
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' $env:EXE "$env:EXE.sha256" "$env:EXE.sig" `
-            --title "PwVault ${{ github.ref_name }}" --generate-notes
+          ls -l files
+          gh release create "$GITHUB_REF_NAME" files/* --repo "$GITHUB_REPOSITORY" \
+            --title "PwVault $GITHUB_REF_NAME" --generate-notes

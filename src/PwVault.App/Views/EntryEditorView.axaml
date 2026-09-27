@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:PwVault.App.ViewModels"
+             xmlns:svc="using:PwVault.App.Services"
              x:Class="PwVault.App.Views.EntryEditorView"
              x:DataType="vm:EntryEditorViewModel">
     <UserControl.KeyBindings>
@@ -15,7 +16,7 @@
                     <TextBlock Classes="error" VerticalAlignment="Center" Text="{Binding Error}" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                         <Button Content="キャンセル" ToolTip.Tip="Esc" Command="{Binding CancelCommand}" />
-                        <Button Classes="accent" Content="保存" ToolTip.Tip="Ctrl+S" Command="{Binding SaveCommand}" />
+                        <Button Classes="accent" Content="保存" ToolTip.Tip="{x:Static svc:Shortcuts.Save}" Command="{Binding SaveCommand}" />
                     </StackPanel>
                 </Grid>
             </Border>

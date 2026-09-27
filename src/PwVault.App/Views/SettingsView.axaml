@@ -42,7 +42,7 @@
                     </StackPanel>
                     <CheckBox IsChecked="{Binding DoubleClickOpensUrl}" Content="一覧をダブルクリックしてサイトを開く" />
                     <StackPanel>
-                        <CheckBox IsChecked="{Binding CloseToTray}" Content="×ボタンで閉じずに通知領域（タスクトレイ）に隠す" />
+                        <CheckBox IsChecked="{Binding CloseToTray}" Content="×ボタンで閉じずに通知領域（Windows はタスクトレイ、Mac はメニューバー）に隠す" />
                         <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"
                                    Text="隠れている間もブラウザ連携と自動ロックは動きます。終了するには通知領域のアイコンを右クリックして「終了」を選びます。" />
                     </StackPanel>

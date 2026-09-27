@@ -127,7 +127,8 @@ public sealed class Harness : IDisposable
 
     public Harness(Action<AppSettings>? configure = null)
     {
-        Integration = new PwVault.App.Bridge.BrowserIntegration(Path.Combine(Dir, "localappdata"), RegistryBase);
+        Integration = new PwVault.App.Bridge.BrowserIntegration(Path.Combine(Dir, "localappdata"), RegistryBase,
+            macSupportRoot: Path.Combine(Dir, "Library", "Application Support"));
         Directory.CreateDirectory(Dir);
         var store = new AppSettingsStore(Path.Combine(Dir, "settings.json"));
         if (configure is not null)

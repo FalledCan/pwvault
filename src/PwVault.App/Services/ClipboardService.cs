@@ -5,27 +5,37 @@ namespace PwVault.App.Services;
 
 /// <summary>
 /// クリップボードへのコピーと自動クリア（FR-08, SR-10）。
-/// Windows では Win32 API を直接使い、クリップボード履歴・クラウド同期・監視ツールから除外する形式を付ける。
-/// クリアは、アプリ自身がコピーした値がまだ残っている場合（シーケンス番号が変わっていない場合）に限る。
+/// ・Windows: Win32 API を直接使い、クリップボード履歴・クラウド同期・監視ツールから除外する形式を付ける
+/// ・macOS: NSPasteboard を直接使い、クリップボード履歴アプリ向けの「機密」の印（org.nspasteboard.ConcealedType）を付ける
+/// クリアは、アプリ自身がコピーした値がまだ残っている場合（変更番号が変わっていない場合）に限る。
 /// </summary>
 public sealed class ClipboardService : IDisposable
 {
     private readonly Func<IntPtr> _ownerWindow;
     private DispatcherTimer? _timer;
-    private uint _ourSequence;
+    private long _ourChange;
 
     public ClipboardService(Func<IntPtr> ownerWindow) => _ownerWindow = ownerWindow;
 
     /// <summary>クリアまでの残り秒数が変わったとき（0 でクリア済み／対象なし）。</summary>
     public event Action<int>? CountdownChanged;
 
+    /// <summary>クリップボードの変更番号（他のアプリがコピーすると変わる）。</summary>
+    private static long ChangeCount =>
+        OperatingSystem.IsWindows() ? Win32Clipboard.GetSequenceNumber()
+        : OperatingSystem.IsMacOS() ? MacPasteboard.ChangeCount
+        : 0;
+
     public void Copy(string text, int clearAfterSeconds)
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("このバージョンのクリップボード機能は Windows 専用です。");
+        if (OperatingSystem.IsWindows())
+            Win32Clipboard.SetText(_ownerWindow(), text);
+        else if (OperatingSystem.IsMacOS())
+            MacPasteboard.SetConcealedText(text);
+        else
+            throw new PlatformNotSupportedException("この OS のクリップボードには対応していません。");
 
-        Win32Clipboard.SetText(_ownerWindow(), text);
-        _ourSequence = Win32Clipboard.GetSequenceNumber();
+        _ourChange = ChangeCount;
         StartCountdown(clearAfterSeconds);
     }
 
@@ -33,11 +43,14 @@ public sealed class ClipboardService : IDisposable
     public void ClearIfOwned()
     {
         StopCountdown();
-        if (_ourSequence == 0 || !OperatingSystem.IsWindows())
+        if (_ourChange == 0)
             return;
-        if (Win32Clipboard.GetSequenceNumber() == _ourSequence)
-            Win32Clipboard.Clear(_ownerWindow());
-        _ourSequence = 0;
+        if (ChangeCount == _ourChange)
+        {
+            if (OperatingSystem.IsWindows()) Win32Clipboard.Clear(_ownerWindow());
+            else if (OperatingSystem.IsMacOS()) MacPasteboard.Clear();
+        }
+        _ourChange = 0;
     }
 
     private void StartCountdown(int seconds)
@@ -50,7 +63,7 @@ public sealed class ClipboardService : IDisposable
         {
             remaining--;
             // 他のアプリが上書きしたら、こちらの値ではないのでカウントダウンをやめる
-            if (remaining <= 0 || (OperatingSystem.IsWindows() && Win32Clipboard.GetSequenceNumber() != _ourSequence))
+            if (remaining <= 0 || ChangeCount != _ourChange)
                 ClearIfOwned();
             else
                 CountdownChanged?.Invoke(remaining);

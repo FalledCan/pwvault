@@ -10,6 +10,7 @@ public partial class VaultView : UserControl
     public VaultView()
     {
         InitializeComponent();
+        PwVault.App.Services.Shortcuts.AdaptForPlatform(this);
     }
 
     protected override void OnLoaded(RoutedEventArgs e)

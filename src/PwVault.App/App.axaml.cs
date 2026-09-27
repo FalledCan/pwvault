@@ -42,6 +42,13 @@ public partial class App : Application
             // 2 つ目の起動があったら、隠れているウィンドウを前に出す
             Program.Instance?.ListenForActivation(() => Dispatcher.UIThread.Post(() => ShowWindow(window)));
 
+            // macOS: Dock のアイコンをクリックしたら（ウィンドウを隠していても）前に出す
+            if (TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
+                activatable.Activated += (_, e) =>
+                {
+                    if (e.Kind == ActivationKind.Reopen) ShowWindow(window);
+                };
+
             // ×ボタンで閉じたときも OS のシャットダウン時も必ず呼ばれる Exit で、ロックとクリップボードの消去を行う
             desktop.Exit += (_, _) =>
             {

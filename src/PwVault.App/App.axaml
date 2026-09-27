@@ -43,7 +43,7 @@
         <FluentTheme />
 
         <Style Selector="Window">
-            <Setter Property="FontFamily" Value="Yu Gothic UI, Meiryo UI, Segoe UI, sans-serif" />
+            <Setter Property="FontFamily" Value="Yu Gothic UI, Meiryo UI, Segoe UI, Hiragino Sans, Hiragino Kaku Gothic ProN, sans-serif" />
         </Style>
         <Style Selector="TextBlock.h1">
             <Setter Property="FontSize" Value="24" />
