@@ -23,12 +23,32 @@ let queue = Promise.resolve();
 // ---------------------------------------------------------------- PwVault 本体との通信
 
 async function send(message) {
+  let response;
   try {
-    const response = await api.runtime.sendNativeMessage(HOST, message);
-    return response ?? { ok: false, error: "no_response" };
+    response = await api.runtime.sendNativeMessage(HOST, message);
   } catch {
     // ホスト未登録（ブラウザ連携が無効）など
     return { ok: false, error: "not_installed" };
+  }
+  // 入力の途中で読み込み直すと入力できなくなるので、fill のときは見送る（次の一覧の更新で行う）
+  if (message.type !== "fill") void reloadIfOutdated(response?.extensionVersion);
+  return response ?? { ok: false, error: "no_response" };
+}
+
+/**
+ * PwVault 本体に同梱の拡張の版が、いま動いている自分の版と違えば読み込み直す。
+ * フォルダから読み込んだ拡張は、PwVault の更新でファイルが新しくなっても自動では読み直されないため。
+ * ファイルがまだ古いままだと読み込み直しが繰り返されるので、同じ版については 1 回だけにする。
+ */
+async function reloadIfOutdated(bundledVersion) {
+  if (!bundledVersion || bundledVersion === api.runtime.getManifest().version) return;
+  try {
+    const { reloadedFor } = await api.storage.local.get("reloadedFor");
+    if (reloadedFor === bundledVersion) return;
+    await api.storage.local.set({ reloadedFor: bundledVersion });
+    api.runtime.reload();
+  } catch (e) {
+    console.warn("PwVault: 拡張機能を読み込み直せませんでした", e);
   }
 }
 

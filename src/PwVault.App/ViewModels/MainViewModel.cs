@@ -296,6 +296,9 @@ public partial class MainViewModel : ViewModelBase
             try { BrowserIntegration.Register(ExePath); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
+        // アプリを更新したら、展開済みの拡張機能のファイルも新しい版にしておく（拡張はそれを見て自分を読み込み直す）
+        try { BrowserIntegration?.EnsureExtensionUpToDate(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         StartBridge();
     }
 
@@ -318,7 +321,9 @@ public partial class MainViewModel : ViewModelBase
                 ShowRequested?.Invoke(this, EventArgs.Empty);
 
             var vault = CurrentPage as VaultViewModel is { IsUnlocked: true } v ? v : null;
-            return BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data));
+            var response = BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data));
+            response.ExtensionVersion = BrowserIntegration.BundledExtensionVersion;
+            return response;
         }).GetTask();
 
     /// <summary>サイトからアイコンを取得する部品（テストでは通信しないものに差し替える）。</summary>

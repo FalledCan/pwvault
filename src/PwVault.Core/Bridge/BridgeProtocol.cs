@@ -43,6 +43,12 @@ public sealed class BridgeResponse
     /// <summary>open のとき、PwVault が起動していなかったので中継が起動した。</summary>
     public bool? Started { get; set; }
 
+    /// <summary>
+    /// PwVault 本体に同梱している拡張機能の版。ブラウザで動いている拡張の方が違う版なら、
+    /// 拡張は自分を読み込み直す（フォルダから読み込んだ拡張は、ファイルが新しくなっても自動では読み直されないため）。
+    /// </summary>
+    public string? ExtensionVersion { get; set; }
+
     public static BridgeResponse Fail(string error) => new() { Ok = false, Error = error };
 }
 

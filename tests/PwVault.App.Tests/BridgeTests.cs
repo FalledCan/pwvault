@@ -122,6 +122,9 @@ public class BridgeTests
 
         var list = await AskViaNativeHost(h.PipeName, new BridgeRequest { Type = "list", Url = "https://www.example.com/login" });
         Assert.True(list.Ok);
+        // 拡張が「自分は古いか」を判断できるよう、同梱の拡張の版を返す（ロック中も同じ）
+        Assert.Equal(BrowserIntegration.BundledExtensionVersion, list.ExtensionVersion);
+        Assert.Equal(BrowserIntegration.BundledExtensionVersion, locked.ExtensionVersion);
         var entry = Assert.Single(list.Entries!);
         Assert.Equal(("Example", "alice"), (entry.Title, entry.Username));
 
@@ -195,6 +198,39 @@ public class BridgeTests
 
         integration.Unregister();
         Assert.Equal(IntegrationStatus.NotRegistered, integration.GetStatus(exe));
+    }
+
+    [Fact]
+    public void ExtensionManifests_HaveSameVersion_AsBundled()
+    {
+        // 本体は Chromium 用の版を「同梱の版」として拡張に伝えるので、Firefox 用も同じ版でなければならない
+        var dir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "browser-extension");
+        string Version(string file) => JsonNode.Parse(File.ReadAllText(Path.Combine(dir, file)))!["version"]!.GetValue<string>();
+        Assert.NotNull(BrowserIntegration.BundledExtensionVersion);
+        Assert.Equal(BrowserIntegration.BundledExtensionVersion, Version("manifest.chromium.json"));
+        Assert.Equal(BrowserIntegration.BundledExtensionVersion, Version("manifest.firefox.json"));
+    }
+
+    [AvaloniaFact]
+    public void EnsureExtensionUpToDate_ReextractsOldExtension()
+    {
+        using var h = new Harness();
+        var integration = h.Integration;
+        integration.ExtractExtension();
+
+        // 前の版のアプリが展開したままの拡張（アプリだけ更新された状態）
+        var manifest = Path.Combine(integration.ChromiumExtensionDir, "manifest.json");
+        File.WriteAllText(manifest, File.ReadAllText(manifest).Replace($"\"{BrowserIntegration.BundledExtensionVersion}\"", "\"0.0.1\""));
+        File.WriteAllText(Path.Combine(integration.ChromiumExtensionDir, "background.js"), "// old");
+
+        integration.EnsureExtensionUpToDate();
+        Assert.Contains($"\"{BrowserIntegration.BundledExtensionVersion}\"", File.ReadAllText(manifest));
+        Assert.NotEqual("// old", File.ReadAllText(Path.Combine(integration.ChromiumExtensionDir, "background.js")));
+
+        // 最新なら書き直さない（ブラウザが読んでいるファイルを無駄に消さない）
+        var written = File.GetLastWriteTimeUtc(manifest);
+        integration.EnsureExtensionUpToDate();
+        Assert.Equal(written, File.GetLastWriteTimeUtc(manifest));
     }
 
     [Fact]

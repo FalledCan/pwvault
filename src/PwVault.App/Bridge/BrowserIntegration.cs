@@ -149,6 +149,30 @@ public sealed class BrowserIntegration
         key.SetValue(null, value);
     }
 
+    /// <summary>アプリに埋め込んだ拡張機能の版（manifest.chromium.json の "version"。Firefox 用も同じ版にしている）。</summary>
+    public static string? BundledExtensionVersion { get; } = ReadBundledExtensionVersion();
+
+    private static string? ReadBundledExtensionVersion()
+    {
+        using var stream = typeof(BrowserIntegration).Assembly.GetManifestResourceStream("ext/manifest.chromium.json");
+        return stream is null ? null : JsonNode.Parse(stream)?["version"]?.GetValue<string>();
+    }
+
+    /// <summary>展開済みの拡張機能が同梱の版と違えば（アプリを更新した後など）、展開し直す。</summary>
+    public void EnsureExtensionUpToDate()
+    {
+        if (!new[] { ChromiumExtensionDir, FirefoxExtensionDir }.All(dir => ExtractedVersion(dir) == BundledExtensionVersion))
+            ExtractExtension();
+    }
+
+    private static string? ExtractedVersion(string dir)
+    {
+        var manifest = Path.Combine(dir, "manifest.json");
+        if (!File.Exists(manifest)) return null;
+        try { return JsonNode.Parse(File.ReadAllText(manifest))?["version"]?.GetValue<string>(); }
+        catch (JsonException) { return null; }
+    }
+
     /// <summary>アプリに埋め込んだ拡張機能をブラウザごとのフォルダに書き出す（manifest はブラウザ別のものを manifest.json にする）。</summary>
     public void ExtractExtension()
     {
