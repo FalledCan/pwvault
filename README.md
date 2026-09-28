@@ -5,9 +5,6 @@
 
 ![エントリ一覧と詳細](docs/images/detail.png)
 
-- 要件定義: [docs/requirements.md](docs/requirements.md)
-- 設計メモ（未決事項の決定・要件との対応・既知の限界）: [docs/design.md](docs/design.md)
-
 ## ダウンロード
 
 [Releases](../../releases) から、使っている OS 用のファイルをダウンロードします。

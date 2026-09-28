@@ -493,3 +493,8 @@ artifacts/
 out/
 dist/
 
+
+# 手元だけに置く資料（公開しない）
+/CLAUDE.md
+/docs/requirements.md
+/docs/design.md
