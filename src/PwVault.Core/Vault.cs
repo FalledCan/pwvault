@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using NSec.Cryptography;
 using PwVault.Core.Crypto;
@@ -21,7 +22,7 @@ public sealed class Vault : IDisposable
     private readonly Dictionary<Guid, EntryData> _plain;
     private readonly TimeProvider _clock;
 
-    public string FilePath { get; }
+    public string FilePath { get; private set; }
 
     /// <summary>未保存の変更があるか。</summary>
     public bool IsDirty { get; private set; }
@@ -29,11 +30,20 @@ public sealed class Vault : IDisposable
     public Guid VaultId => _header.VaultId;
     public KdfParameters Kdf => _header.Kdf;
 
+    /// <summary>他の端末の変更を取り込んでメモリ上の内容が変わった回数（保存の直前の取り込みも含む。画面の更新に使う）。</summary>
+    public int MergeCount { get; private set; }
+
+    // 最後に読み書きしたときのファイルの中身の SHA-256 とヘッダ（他の端末が書き換えたかの判定と、ヘッダの取り込みに使う）
+    private byte[]? _diskHash;
+    private VaultHeader _diskHeader;
+
     private Vault(string path, VaultHeader header, Key vaultKey, IEnumerable<EncryptedEntry> records,
-        Dictionary<Guid, EntryData> plain, TimeProvider clock)
+        Dictionary<Guid, EntryData> plain, TimeProvider clock, byte[]? diskHash = null)
     {
         FilePath = Path.GetFullPath(path);
         _header = header;
+        _diskHeader = header;
+        _diskHash = diskHash;
         _vaultKey = vaultKey;
         _records = records.ToDictionary(r => r.Id);
         _plain = plain;
@@ -90,14 +100,14 @@ public sealed class Vault : IDisposable
             throw new VaultException(VaultErrorKind.Io, "保管庫ファイルを読み込めませんでした。", ex);
         }
 
-        return Open(path, VaultFileCodec.Deserialize(bytes), masterPassword, clock);
+        return Open(path, VaultFileCodec.Deserialize(bytes), masterPassword, clock, SHA256.HashData(bytes));
     }
 
-    internal static Vault Open(string path, VaultDocument doc, string masterPassword, TimeProvider? clock = null)
+    internal static Vault Open(string path, VaultDocument doc, string masterPassword, TimeProvider? clock = null, byte[]? diskHash = null)
     {
         var vaultKey = UnwrapVaultKey(doc.Header, masterPassword)
             ?? throw new VaultException(VaultErrorKind.WrongPassword, "マスターパスワードが違います。");
-        return OpenWithKey(path, doc, vaultKey, clock);
+        return OpenWithKey(path, doc, vaultKey, clock, diskHash);
     }
 
     // ------------------------------------------------------------------ クイックアンロック（Windows Hello など）
@@ -132,7 +142,7 @@ public sealed class Vault : IDisposable
         using var raw = AeadBox.Open(key, QuickUnlockAad(doc.Header, context), wrappedVaultKey)
             ?? throw new VaultException(VaultErrorKind.QuickUnlockUnavailable,
                 "登録が無効になっています（マスターパスワードの変更など）。マスターパスワードでアンロックしてください。");
-        return OpenWithKey(path, doc, KeyHierarchy.ImportVaultKey(raw.Span), clock);
+        return OpenWithKey(path, doc, KeyHierarchy.ImportVaultKey(raw.Span), clock, SHA256.HashData(bytes));
     }
 
     private static byte[] QuickUnlockAad(VaultHeader header, string context) =>
@@ -143,7 +153,7 @@ public sealed class Vault : IDisposable
             .Bytes(System.Security.Cryptography.SHA256.HashData(header.WrappedVaultKey.Ciphertext))
             .ToArray();
 
-    private static Vault OpenWithKey(string path, VaultDocument doc, Key vaultKey, TimeProvider? clock)
+    private static Vault OpenWithKey(string path, VaultDocument doc, Key vaultKey, TimeProvider? clock, byte[]? diskHash)
     {
         try
         {
@@ -154,7 +164,7 @@ public sealed class Vault : IDisposable
                 if (!record.Deleted)
                     plain[record.Id] = data;
             }
-            return new Vault(path, doc.Header, vaultKey, doc.Entries, plain, clock ?? TimeProvider.System);
+            return new Vault(path, doc.Header, vaultKey, doc.Entries, plain, clock ?? TimeProvider.System, diskHash);
         }
         catch
         {
@@ -244,19 +254,229 @@ public sealed class Vault : IDisposable
 
     // ------------------------------------------------------------------ 保存・鍵の変更
 
+    /// <summary>
+    /// ファイルに保存する。同期フォルダで複数の端末から使うときのため、書く直前にファイルを読み直し、
+    /// 他の端末の変更があれば取り込んでから書く（<see cref="SyncFromDisk"/>）。
+    /// </summary>
     public void Save(int backupGenerations)
     {
         EnsureUnlocked();
         try
         {
-            AtomicFileStore.Write(FilePath, ToBytes(), backupGenerations);
+            SyncFromDisk();
+        }
+        catch (VaultException ex) when (ex.Kind is VaultErrorKind.Corrupted or VaultErrorKind.InvalidFormat)
+        {
+            // 同期アプリの書き込み途中などで読めない。今のファイルは .bak に退避されるので、こちらの内容で書く
+        }
+
+        var bytes = ToBytes();
+        try
+        {
+            AtomicFileStore.Write(FilePath, bytes, backupGenerations);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new VaultException(VaultErrorKind.Io, "保管庫を保存できませんでした。", ex);
         }
+        _diskHash = SHA256.HashData(bytes);
+        _diskHeader = _header;
         IsDirty = false;
     }
+
+    // ------------------------------------------------------------------ 複数の端末での利用（同期フォルダ）
+
+    /// <summary>
+    /// ファイルが他の端末で書き換えられていたら、エントリ単位で取り込む。メモリ上の内容が変わったら true。
+    /// こちらにしかない変更が残っていれば <see cref="IsDirty"/> を立てる（保存すると書き戻される）。
+    /// ファイルが無いときは何もしない。
+    /// </summary>
+    public bool SyncFromDisk()
+    {
+        EnsureUnlocked();
+        byte[] bytes;
+        try
+        {
+            if (!File.Exists(FilePath)) return false;
+            bytes = File.ReadAllBytes(FilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new VaultException(VaultErrorKind.Io, "保管庫ファイルを読み込めませんでした。", ex);
+        }
+
+        var hash = SHA256.HashData(bytes);
+        if (_diskHash is not null && hash.AsSpan().SequenceEqual(_diskHash))
+            return false;
+
+        var doc = VaultFileCodec.Deserialize(bytes);
+        var changed = Merge(doc, adoptHeader: true);
+        _diskHash = hash;
+        _diskHeader = doc.Header;
+        if (!ToBytes().AsSpan().SequenceEqual(bytes))
+            IsDirty = true;
+        return changed;
+    }
+
+    /// <summary>
+    /// 同期アプリが作った競合コピー（「vault (conflicted copy …).pwv」「vault (1).pwv」など）のうち、
+    /// この保管庫のものを取り込む。取り込んだコピーのパスを返す（保存に成功したら消してよい）。
+    /// </summary>
+    public IReadOnlyList<string> MergeConflictCopies()
+    {
+        EnsureUnlocked();
+        var merged = new List<string>();
+        foreach (var path in FindConflictCopies(FilePath))
+        {
+            try
+            {
+                var doc = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
+                if (doc.Header.VaultId != VaultId) continue;
+                Merge(doc, adoptHeader: false);
+                merged.Add(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException)
+            {
+                // 読めない・壊れているコピーは取り込まずに残す
+            }
+        }
+        if (merged.Count > 0) IsDirty = true;
+        return merged;
+    }
+
+    /// <summary>同期アプリの競合コピーらしいファイル（同じフォルダ・同じ拡張子で、名前が「元の名前 (…)」や「…conflict…」）。</summary>
+    public static IReadOnlyList<string> FindConflictCopies(string vaultPath)
+    {
+        var full = Path.GetFullPath(vaultPath);
+        var dir = Path.GetDirectoryName(full)!;
+        var name = Path.GetFileNameWithoutExtension(full);
+        var ext = Path.GetExtension(full);
+        if (!Directory.Exists(dir)) return [];
+
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return Directory.EnumerateFiles(dir)
+            .Where(p => string.Equals(Path.GetExtension(p), ext, comparison) && !string.Equals(p, full, comparison))
+            .Where(p =>
+            {
+                var n = Path.GetFileNameWithoutExtension(p);
+                if (!n.StartsWith(name, comparison)) return false;
+                var rest = n[name.Length..];
+                return rest.StartsWith(" (", StringComparison.Ordinal) && rest.EndsWith(')')
+                       || rest.Contains("conflict", StringComparison.OrdinalIgnoreCase)
+                       || rest.Contains("競合", StringComparison.Ordinal);
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// 保管庫を別の場所に保存し直し、以後はそこを使う（保存先の切り替え）。元のファイルは消さない。
+    /// 移動先に同じ保管庫があれば合体する。別の保管庫があれば <see cref="VaultErrorKind.DifferentVault"/>。
+    /// </summary>
+    public void MoveTo(string newPath, int backupGenerations)
+    {
+        EnsureUnlocked();
+        var (oldPath, oldHash, oldHeader) = (FilePath, _diskHash, _diskHeader);
+        FilePath = Path.GetFullPath(newPath);
+        _diskHash = null;
+        _diskHeader = _header;
+        try
+        {
+            Save(backupGenerations);
+        }
+        catch
+        {
+            (FilePath, _diskHash, _diskHeader) = (oldPath, oldHash, oldHeader);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 他の端末のファイルの内容を取り込む。エントリごとに「リビジョンが大きい方 → 更新日時が新しい方」を残す。
+    /// 両方が同じ版から別々に変えていた（リビジョンが同じ）ときは、負けた側のパスワードを勝った側の履歴に残す。
+    /// 取り込むエントリはすべて保管庫鍵で認証してから反映する（1 つでも失敗したら何も反映しない）。
+    /// </summary>
+    private bool Merge(VaultDocument doc, bool adoptHeader)
+    {
+        EnsureUnlocked();
+        if (doc.Header.VaultId != _header.VaultId)
+            throw new VaultException(VaultErrorKind.DifferentVault, "別の保管庫のファイルです。");
+
+        var incoming = doc.Entries.Select(r => (Record: r, Data: DecryptEntry(doc.Header, _vaultKey!, r))).ToList();
+
+        var changed = false;
+        // 他の端末でマスターパスワードや KDF を変えていたら、こちらも合わせる（こちらでも変えていたらこちらを優先）
+        if (adoptHeader && !SameHeader(doc.Header, _header) && SameHeader(_header, _diskHeader))
+        {
+            _header = doc.Header;
+            changed = true;
+        }
+
+        foreach (var (theirs, theirData) in incoming)
+        {
+            if (!_records.TryGetValue(theirs.Id, out var mine))
+            {
+                Accept(theirs, theirData);
+                changed = true;
+                continue;
+            }
+            if (SameRecord(mine, theirs)) continue;
+
+            var conflict = mine.Revision == theirs.Revision;
+            if (CompareRecords(theirs, mine) > 0)
+            {
+                var myPassword = mine.Deleted ? null : _plain.GetValueOrDefault(mine.Id)?.Password;
+                Accept(theirs, theirData);
+                changed = true;
+                if (conflict && myPassword is not null) KeepLosingPassword(theirs.Id, myPassword);
+            }
+            else if (conflict && !theirs.Deleted)
+            {
+                KeepLosingPassword(mine.Id, theirData.Password);
+            }
+        }
+        if (changed) MergeCount++;
+        return changed;
+    }
+
+    private void Accept(EncryptedEntry record, EntryData data)
+    {
+        _records[record.Id] = record;
+        if (record.Deleted) _plain.Remove(record.Id);
+        else _plain[record.Id] = data;
+    }
+
+    /// <summary>競合で負けた側のパスワードを、残した側の履歴に入れる（どちらかの端末で入れたパスワードを失わないように）。</summary>
+    private void KeepLosingPassword(Guid id, string password)
+    {
+        if (password.Length == 0 || !_plain.TryGetValue(id, out var data)) return;
+        if (data.Password == password || data.History.Any(h => h.Password == password)) return;
+
+        var updated = data.Clone();
+        updated.History.Insert(0, new PasswordHistoryItem(password, _clock.GetUtcNow()));
+        if (updated.History.Count > MaxHistoryItems)
+            updated.History.RemoveRange(MaxHistoryItems, updated.History.Count - MaxHistoryItems);
+        Put(id, updated, _records[id].Revision + 1);
+    }
+
+    /// <summary>どちらのエントリを残すか。どの端末で比べても同じ結果になるよう、最後は暗号文のバイト列で決める。</summary>
+    private static int CompareRecords(EncryptedEntry a, EncryptedEntry b)
+    {
+        var c = a.Revision.CompareTo(b.Revision);
+        if (c == 0) c = string.CompareOrdinal(a.UpdatedAt, b.UpdatedAt); // 固定書式なので文字列順 = 時刻順
+        if (c == 0) c = a.Deleted.CompareTo(b.Deleted);
+        if (c == 0) c = a.Box.Ciphertext.AsSpan().SequenceCompareTo(b.Box.Ciphertext);
+        if (c == 0) c = a.Box.Nonce.AsSpan().SequenceCompareTo(b.Box.Nonce);
+        return c;
+    }
+
+    private static bool SameRecord(EncryptedEntry a, EncryptedEntry b) =>
+        a.Revision == b.Revision && a.UpdatedAt == b.UpdatedAt && a.Deleted == b.Deleted
+        && a.Box.Nonce.AsSpan().SequenceEqual(b.Box.Nonce) && a.Box.Ciphertext.AsSpan().SequenceEqual(b.Box.Ciphertext);
+
+    private static bool SameHeader(VaultHeader a, VaultHeader b) =>
+        a.VaultId == b.VaultId && a.FormatVersion == b.FormatVersion
+        && a.WrappedVaultKey.Nonce.AsSpan().SequenceEqual(b.WrappedVaultKey.Nonce)
+        && a.WrappedVaultKey.Ciphertext.AsSpan().SequenceEqual(b.WrappedVaultKey.Ciphertext);
 
     internal byte[] ToBytes() =>
         VaultFileCodec.Serialize(new VaultDocument(_header, _records.Values.OrderBy(r => r.Id).ToList()));

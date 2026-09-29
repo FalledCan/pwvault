@@ -131,6 +131,24 @@ public sealed class Harness : IDisposable
     public PwVault.App.Bridge.BrowserIntegration Integration { get; }
     public string RegistryBase { get; } = @"Software\PwVaultTest\" + Guid.NewGuid().ToString("N");
 
+    /// <summary>一時フォルダの中だけを探す同期フォルダの探索。</summary>
+    public SyncFolderLocator SyncFolders { get; }
+
+    /// <summary>「Google ドライブ パソコン版」が入っている状態にする（ミラーモードの ~/My Drive）。同期フォルダを返す。</summary>
+    public string CreateGoogleDrive() => Directory.CreateDirectory(Path.Combine(Dir, "home", "My Drive")).FullName;
+
+    /// <summary>Nextcloud デスクトップが設定ファイルに同期フォルダを書いている状態にする。同期フォルダを返す。</summary>
+    public string CreateNextcloud()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(Dir, "nc-sync")).FullName;
+        var cfg = OperatingSystem.IsMacOS()
+            ? Path.Combine(Dir, "home", "Library", "Preferences", "Nextcloud", "nextcloud.cfg")
+            : Path.Combine(Dir, "appdata", "Nextcloud", "nextcloud.cfg");
+        Directory.CreateDirectory(Path.GetDirectoryName(cfg)!);
+        File.WriteAllText(cfg, $"[Accounts]\n0\\Folders\\1\\localPath={folder.Replace('\\', '/')}/\n0\\Folders\\1\\paused=false\n");
+        return folder;
+    }
+
     /// <summary>自動起動の登録先もテスト用（本物の Run キー・LaunchAgents には触らない）。</summary>
     public AutoStart AutoStart { get; }
 
@@ -150,10 +168,14 @@ public sealed class Harness : IDisposable
 
         Window = new MainWindow { Width = 1100, Height = 720 };
         // テストでは通信しない（アイコンは Icons に積んだものだけ返す）・ブラウザも開かない
+        // 同期フォルダ（Google ドライブ・Nextcloud）も一時フォルダの中だけを探す（本物の同期フォルダには触らない）
+        SyncFolders = new SyncFolderLocator(home: Path.Combine(Dir, "home"), appData: Path.Combine(Dir, "appdata"),
+            documents: Path.Combine(Dir, "documents"), driveRoots: () => []);
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
             new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock,
-            AutoStart);
+            AutoStart, SyncFolders);
         Main.OpenInBrowser = OpenedUrls.Add;
+        Main.VaultSyncInterval = TimeSpan.FromHours(1); // テストでは SyncNow を直接呼ぶ
         Window.DataContext = Main;
         Window.Show();
         Pump();

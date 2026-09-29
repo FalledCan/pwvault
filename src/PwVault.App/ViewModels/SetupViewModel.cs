@@ -6,6 +6,8 @@ using PwVault.Core.Tools;
 
 namespace PwVault.App.ViewModels;
 
+public sealed record CloudVault(string Label, string Path);
+
 /// <summary>S1 初回セットアップ（FR-01）。保存先・マスターパスワード・緊急キットの案内。</summary>
 public partial class SetupViewModel : ViewModelBase
 {
@@ -14,7 +16,21 @@ public partial class SetupViewModel : ViewModelBase
     public SetupViewModel(MainViewModel main)
     {
         _main = main;
-        VaultPath = Services.AppSettings.DefaultVaultPath;
+        VaultPath = Path.Combine(main.SyncFolders.LocalFolder, "vault.pwv");
+        CloudVaults = main.SyncFolders.FindExistingVaults()
+            .Select(v => new CloudVault($"{Services.SyncFolderLocator.DisplayName(v.Kind)}の保管庫を開く", v.Path))
+            .ToList();
+    }
+
+    /// <summary>同期フォルダ（Google ドライブ・Nextcloud）に既にある保管庫。2 台目の PC ではここから開く。</summary>
+    public IReadOnlyList<CloudVault> CloudVaults { get; }
+
+    public bool HasCloudVaults => CloudVaults.Count > 0;
+
+    [RelayCommand]
+    private void OpenCloudVault(CloudVault? vault)
+    {
+        if (vault is not null) _main.ShowUnlock(vault.Path);
     }
 
     [ObservableProperty]

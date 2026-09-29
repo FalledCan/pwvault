@@ -25,6 +25,7 @@ public partial class SettingsViewModel : ViewModelBase
         Iterations = owner.Vault.Kdf.Iterations;
         UpdateKdfCurrent();
         UpdateBrowserStatus();
+        UpdateStorage();
         FetchSiteIcons = s.FetchSiteIcons;
         DoubleClickOpensUrl = s.DoubleClickOpensUrl;
         CloseToTray = s.CloseToTray;
@@ -36,6 +37,84 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     public string VaultPath => _owner.Vault.FilePath;
+
+    // ---- 保存先（この PC / Google ドライブ / Nextcloud / その他）
+
+    private Services.SyncFolderLocator Folders => _owner.Main.SyncFolders;
+
+    public string CurrentStorage => Services.SyncFolderLocator.DisplayName(Folders.KindOf(VaultPath));
+    public string? GoogleDriveFolder { get; private set; }
+    public string? NextcloudFolder { get; private set; }
+    public bool HasGoogleDrive => GoogleDriveFolder is not null;
+    public bool HasNextcloud => NextcloudFolder is not null;
+    public string GoogleDriveText => GoogleDriveFolder ?? "見つかりません（Google ドライブ パソコン版を入れてサインインしてください）";
+    public string NextcloudText => NextcloudFolder ?? "見つかりません（Nextcloud デスクトップ アプリを入れて同期を設定してください）";
+
+    public bool CanMoveToGoogleDrive => HasGoogleDrive && !StorageBusy;
+    public bool CanMoveToNextcloud => HasNextcloud && !StorageBusy;
+
+    [ObservableProperty] public partial string? StorageStatus { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanMoveToGoogleDrive), nameof(CanMoveToNextcloud))]
+    public partial bool StorageBusy { get; set; }
+
+    private void UpdateStorage()
+    {
+        GoogleDriveFolder = Folders.RootOf(Services.StorageKind.GoogleDrive);
+        NextcloudFolder = Folders.RootOf(Services.StorageKind.Nextcloud);
+        OnPropertyChanged(nameof(VaultPath));
+        OnPropertyChanged(nameof(CurrentStorage));
+        OnPropertyChanged(nameof(GoogleDriveFolder));
+        OnPropertyChanged(nameof(NextcloudFolder));
+        OnPropertyChanged(nameof(HasGoogleDrive));
+        OnPropertyChanged(nameof(HasNextcloud));
+        OnPropertyChanged(nameof(GoogleDriveText));
+        OnPropertyChanged(nameof(NextcloudText));
+        OnPropertyChanged(nameof(CanMoveToGoogleDrive));
+        OnPropertyChanged(nameof(CanMoveToNextcloud));
+    }
+
+    [RelayCommand]
+    private Task MoveToLocalAsync() => MoveToKindAsync(Services.StorageKind.Local);
+
+    [RelayCommand]
+    private Task MoveToGoogleDriveAsync() => MoveToKindAsync(Services.StorageKind.GoogleDrive);
+
+    [RelayCommand]
+    private Task MoveToNextcloudAsync() => MoveToKindAsync(Services.StorageKind.Nextcloud);
+
+    [RelayCommand]
+    private async Task MoveToOtherAsync()
+    {
+        var path = await _owner.Main.FileDialogs.SaveFileAsync("保管庫の移動先", Path.GetFileName(VaultPath), "PwVault 保管庫", "pwv");
+        if (path is not null) await MoveAsync(path, "選んだ場所");
+    }
+
+    private async Task MoveToKindAsync(Services.StorageKind kind)
+    {
+        UpdateStorage();
+        if (Folders.TargetPath(kind, Path.GetFileName(VaultPath)) is not { } target)
+        {
+            StorageStatus = $"{Services.SyncFolderLocator.DisplayName(kind)} の同期フォルダが見つかりません。";
+            return;
+        }
+        await MoveAsync(target, Services.SyncFolderLocator.DisplayName(kind));
+    }
+
+    private async Task MoveAsync(string target, string name)
+    {
+        if (!await _owner.Main.ConfirmAsync("保存先の変更",
+                $"保管庫を「{name}」に移します。\n{target}\n\n移動先に同じ保管庫が既にあれば、内容を合体します。", "移す"))
+            return;
+        StorageBusy = true;
+        try
+        {
+            StorageStatus = await _owner.MoveVaultToAsync(target);
+            if (_owner.IsUnlocked) UpdateStorage();
+        }
+        finally { StorageBusy = false; }
+    }
     public int MinMemoryMiB => KdfParameters.MinRecommendedMemoryKiB / 1024;
     public int MinIterations => KdfParameters.MinRecommendedIterations;
     public int MaxMemory => MaxMemoryMiB;

@@ -11,6 +11,33 @@
             </Grid>
             <TextBlock Classes="muted" FontSize="12" Text="{Binding VaultPath, StringFormat='保管庫: {0}'}" />
 
+            <!-- 保存先 -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="保存先（ほかの PC と共有）" />
+                    <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                               Text="Google ドライブ（パソコン版）や Nextcloud のアプリが PC 上に作る同期フォルダに保管庫を置くと、ほかの PC でも同じ保管庫を使えます。アップロードはそれらのアプリが行い、PwVault 自体は通信しません。クラウドに置かれるのは暗号化済みのファイルだけです。" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="現在:" />
+                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding CurrentStorage}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                        <Button Content="この PC に移す" MinWidth="200" IsEnabled="{Binding !StorageBusy}" Command="{Binding MoveToLocalCommand}" />
+                        <TextBlock Grid.Column="1" Classes="muted" FontSize="12" VerticalAlignment="Center" Text="ドキュメントの PwVault フォルダ" />
+                        <Button Grid.Row="1" Content="Google ドライブに移す" MinWidth="200" IsEnabled="{Binding CanMoveToGoogleDrive}" Command="{Binding MoveToGoogleDriveCommand}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding GoogleDriveText}" />
+                        <Button Grid.Row="2" Content="Nextcloud に移す" MinWidth="200" IsEnabled="{Binding CanMoveToNextcloud}" Command="{Binding MoveToNextcloudCommand}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding NextcloudText}" />
+                        <Button Grid.Row="3" Content="その他の場所へ…" MinWidth="200" IsEnabled="{Binding !StorageBusy}" Command="{Binding MoveToOtherCommand}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Text="OneDrive・Dropbox などの同期フォルダも選べます" />
+                    </Grid>
+                    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                               Text="複数の PC で同時に使っても、変更はエントリごとに自動で合体します（同じエントリを両方で変えたときは新しい方を残し、もう一方のパスワードは履歴に残します）。2 台目の PC では、最初の画面で同期フォルダの保管庫を開いてください。" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding StorageStatus}"
+                               IsVisible="{Binding StorageStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+            </Border>
+
             <!-- 一般 -->
             <Border Classes="card">
                 <StackPanel Spacing="12">

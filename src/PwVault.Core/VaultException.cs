@@ -17,6 +17,8 @@ public enum VaultErrorKind
     Io,
     /// <summary>Windows Hello などのクイックアンロックが使えない（期限切れ・マスターパスワード変更後など）。</summary>
     QuickUnlockUnavailable,
+    /// <summary>取り込もうとしたファイルが別の保管庫（保管庫 ID が違う）。</summary>
+    DifferentVault,
 }
 
 /// <summary>

@@ -11,6 +11,27 @@
                     <TextBlock Classes="muted" Text="パスワードは暗号化してこの PC 上の 1 つのファイルに保存します。通信は一切行いません。" />
                 </StackPanel>
 
+                <!-- 2 台目の PC: 同期フォルダに既にある保管庫を開く -->
+                <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14" IsVisible="{Binding HasCloudVaults}">
+                    <StackPanel Spacing="8">
+                        <TextBlock FontWeight="SemiBold" Text="ほかの PC で作った保管庫が見つかりました" />
+                        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                                   Text="同じ保管庫を使う場合は、新しく作らずにこちらを開いてください。" />
+                        <ItemsControl ItemsSource="{Binding CloudVaults}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CloudVault">
+                                    <StackPanel Margin="0,4,0,0" Spacing="2">
+                                        <Button Classes="accent" Content="{Binding Label}"
+                                                Command="{Binding $parent[ItemsControl].((vm:SetupViewModel)DataContext).OpenCloudVaultCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding Path}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
                 <StackPanel>
                     <TextBlock Classes="label" Text="保存先" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">

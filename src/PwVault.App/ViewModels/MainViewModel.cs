@@ -45,9 +45,10 @@ public partial class MainViewModel : ViewModelBase
         BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
         UpdateService? updates = null,
         IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null,
-        AutoStart? autoStart = null)
+        AutoStart? autoStart = null, SyncFolderLocator? syncFolders = null)
     {
         AutoStart = autoStart ?? (AutoStart.IsSupported ? new AutoStart() : null);
+        SyncFolders = syncFolders ?? new SyncFolderLocator();
         QuickUnlock = quickUnlock ?? QuickUnlockProviders.CreateDefault();
         LocalDataDir = localDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PwVault");
         Clock = clock ?? TimeProvider.System;
@@ -71,6 +72,14 @@ public partial class MainViewModel : ViewModelBase
             ResumeBrowserIntegration();
         RepairAutoStart();
     }
+
+    // ------------------------------------------------------------------ 保存先（クラウドの同期フォルダ）
+
+    /// <summary>Google ドライブ・Nextcloud の同期フォルダを探す部品（テストでは一時フォルダを見るものに差し替える）。</summary>
+    public SyncFolderLocator SyncFolders { get; }
+
+    /// <summary>アンロック中に、他の端末による保管庫ファイルの変更を確認する間隔。</summary>
+    public TimeSpan VaultSyncInterval { get; set; } = TimeSpan.FromSeconds(3);
 
     // ------------------------------------------------------------------ Windows Hello（クイックアンロック）
 

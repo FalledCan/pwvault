@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using PwVault.App.Services;
 using PwVault.Core;
@@ -63,11 +64,21 @@ public partial class VaultViewModel : ViewModelBase
         SelectedSort = SortOptions.FirstOrDefault(s => s.Sort == main.Settings.Sort) ?? SortOptions[0];
         main.Clipboard.CountdownChanged += OnClipboardCountdown;
         Refresh();
+
+        // 同期フォルダで他の端末と共有しているとき、その変更を取り込む（アンロック直後と、一定間隔ごと）
+        SyncNow();
+        _syncTimer = new DispatcherTimer { Interval = main.VaultSyncInterval };
+        _syncTimer.Tick += (_, _) => SyncNow();
+        _syncTimer.Start();
     }
 
     public MainViewModel Main { get; }
 
-    public IconService Icons { get; }
+    public IconService Icons { get; private set; }
+
+    private readonly DispatcherTimer _syncTimer;
+    private string? _lastSyncError;
+    private int _seenMergeCount;
 
     private void OnIconChanged(string host)
     {
@@ -239,6 +250,130 @@ public partial class VaultViewModel : ViewModelBase
         }
     }
 
+    // ------------------------------------------------------------------ 他の端末との同期（同期フォルダ）
+
+    /// <summary>
+    /// 他の端末が保管庫ファイルを書き換えていたら取り込み、同期アプリの競合コピーがあれば合体して消す。
+    /// こちらにしかない変更（前回保存に失敗したものを含む）があれば書き戻す。取り込んだら一覧を更新する。
+    /// </summary>
+    public void SyncNow()
+    {
+        if (_vault is not { IsLocked: false } vault) return;
+        try
+        {
+            var copies = vault.MergeConflictCopies();
+            vault.SyncFromDisk();
+            if (vault.IsDirty && !Persist()) return;
+            // 保存の直前の取り込み（Persist の中）で変わった分も含めて、前回から取り込みがあったか
+            var changed = vault.MergeCount != _seenMergeCount || copies.Count > 0;
+            _seenMergeCount = vault.MergeCount;
+            foreach (var copy in copies)
+            {
+                try { File.Delete(copy); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+            _lastSyncError = null;
+            if (changed)
+            {
+                Refresh();
+                Status = "他の端末での変更を取り込みました。";
+            }
+        }
+        catch (VaultException ex) when (ex.Kind is VaultErrorKind.Io or VaultErrorKind.Corrupted or VaultErrorKind.InvalidFormat)
+        {
+            // 同期アプリが書き込み中などで読めない。次の確認でやり直す
+        }
+        catch (VaultException ex)
+        {
+            // 改ざん・別の保管庫・新しい形式など。同じ内容を何度も出さない
+            var message = "保管庫ファイルの変更を取り込めませんでした: " + ex.Message;
+            if (message != _lastSyncError) Status = _lastSyncError = message;
+        }
+    }
+
+    /// <summary>
+    /// 保管庫を別の場所へ移す（保存先の切り替え）。移動先に同じ保管庫があれば合体する。
+    /// アイコンのキャッシュと世代バックアップも移す。元が「この PC」なら元のファイルを消し、
+    /// 同期フォルダなど他の場所からの移動なら、ほかの端末が使っているかもしれないので残す。
+    /// 移動先に別の保管庫があれば、そちらを開くか確認する。結果の説明を返す。
+    /// </summary>
+    public async Task<string> MoveVaultToAsync(string target)
+    {
+        var vault = Vault;
+        var oldPath = vault.FilePath;
+        target = Path.GetFullPath(target);
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (string.Equals(oldPath, target, comparison)) return "すでにこの場所に保存しています。";
+
+        if (File.Exists(target))
+        {
+            Guid otherId;
+            try { otherId = Core.Format.VaultFileCodec.Deserialize(File.ReadAllBytes(target)).Header.VaultId; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException)
+            {
+                return "移動先に読めないファイル（" + Path.GetFileName(target) + "）があるため、移動しませんでした。";
+            }
+            if (otherId != vault.VaultId)
+            {
+                if (!await Main.ConfirmAsync("移動先に別の保管庫があります",
+                        "移動先には別の保管庫があります。今の保管庫はそのまま残し、移動先の保管庫を開きますか？\n（開くには、その保管庫のマスターパスワードが必要です）",
+                        "移動先の保管庫を開く"))
+                    return "移動をやめました。";
+                Main.Lock();
+                Main.ShowUnlock(target);
+                return "移動先の保管庫を開きます。";
+            }
+        }
+
+        var keepOriginal = Main.SyncFolders.KindOf(oldPath) != StorageKind.Local;
+        Icons.IconChanged -= OnIconChanged;
+        Icons.Dispose(); // 未保存のアイコンを元の場所に書いてから移す
+        try
+        {
+            vault.MoveTo(target, Main.Settings.BackupGenerations);
+        }
+        catch (VaultException ex)
+        {
+            RecreateIcons();
+            return "移動できませんでした: " + ex.Message;
+        }
+
+        MoveOrCopy(Core.Icons.IconCache.PathFor(oldPath), Core.Icons.IconCache.PathFor(target), keepOriginal);
+        var backups = Core.Storage.AtomicFileStore.ListBackups(oldPath);
+        if (Core.Storage.AtomicFileStore.ListBackups(target).Count == 0)
+            for (var i = 0; i < backups.Count; i++)
+                MoveOrCopy(backups[i], Core.Storage.AtomicFileStore.BackupPath(target, i + 1), keepOriginal);
+        if (!keepOriginal)
+        {
+            try { File.Delete(oldPath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+
+        RecreateIcons();
+        Main.Settings.VaultPath = target;
+        Main.SaveSettings();
+        Refresh();
+        var where = SyncFolderLocator.DisplayName(Main.SyncFolders.KindOf(target));
+        return $"保管庫を「{where}」に移しました。" + (keepOriginal ? "\n元の場所のファイルは、ほかの端末が使っているかもしれないので残してあります。" : "");
+    }
+
+    private void RecreateIcons()
+    {
+        Icons = new IconService(Vault, Main.IconFetcher);
+        Icons.IconChanged += OnIconChanged;
+    }
+
+    private static void MoveOrCopy(string source, string dest, bool copy)
+    {
+        try
+        {
+            if (!File.Exists(source) || File.Exists(dest)) return;
+            if (copy) File.Copy(source, dest);
+            else File.Move(source, dest);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 付随ファイルは無くても困らない */ }
+    }
+
     // ------------------------------------------------------------------ エントリ操作
 
     [RelayCommand]
@@ -258,18 +393,21 @@ public partial class VaultViewModel : ViewModelBase
     public void CommitEditor(Guid? id, EntryData data)
     {
         Guid savedId;
-        if (id is { } existing)
+        var recreated = false;
+        if (id is { } existing && Vault.GetEntry(existing) is not null)
         {
             Vault.UpdateEntry(existing, data);
             savedId = existing;
         }
         else
         {
+            // 編集している間に、ほかの端末で完全削除されていたら、新しいエントリとして残す
+            recreated = id is not null;
             savedId = Vault.AddEntry(data);
         }
 
         Editor = null;
-        if (Persist()) Status = "保存しました。";
+        if (Persist()) Status = recreated ? "編集中にほかの端末で削除されていたため、新しいエントリとして保存しました。" : "保存しました。";
         Refresh();
         Select(savedId);
     }
@@ -402,6 +540,7 @@ public partial class VaultViewModel : ViewModelBase
     /// <summary>ロック時の後始末。鍵を破棄し、画面上の復号データへの参照を消す。保管庫のパスを返す。</summary>
     public string Close()
     {
+        _syncTimer.Stop();
         Main.Clipboard.CountdownChanged -= OnClipboardCountdown;
         var path = _vault?.FilePath ?? Main.Settings.VaultPath ?? "";
         if (_vault is { IsDirty: true }) Persist();
