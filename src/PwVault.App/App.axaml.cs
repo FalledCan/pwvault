@@ -46,6 +46,24 @@ public partial class App : Application
                 e.SetObserved();
             };
 
+            // 自動タイプの選択窓（ショートカットキーで出る小さなウィンドウ）
+            AutoTypePickerWindow? picker = null;
+            main.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(MainViewModel.AutoTypePicker)) return;
+                if (picker is { IsClosed: false })
+                {
+                    picker.ClosingFromViewModel = true;
+                    picker.Close();
+                }
+                picker = null;
+                if (main.AutoTypePicker is { } vm)
+                {
+                    picker = new AutoTypePickerWindow { DataContext = vm };
+                    picker.Show();
+                }
+            };
+
             // ブラウザ拡張の「PwVault をアンロックする」から呼ばれたら前に出す
             main.ShowRequested += (_, _) => ShowWindow(window);
 

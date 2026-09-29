@@ -18,6 +18,15 @@ public sealed class EntryData
     /// <summary>ゴミ箱に入れた日時。null ならゴミ箱外。完全削除（墓標）とは別物。</summary>
     public DateTimeOffset? TrashedAt { get; set; }
 
+    /// <summary>
+    /// 自動タイプで入力してよいアプリ（実行ファイル名。例: ffxivboot.exe）。
+    /// このアプリが前面のときは候補の先頭に出し、確認なしで入力する。
+    /// </summary>
+    public List<string> AutoTypeApps { get; set; } = [];
+
+    /// <summary>自動タイプで打ち込む内容。</summary>
+    public AutoTypeMode AutoType { get; set; } = AutoTypeMode.UsernameTabPassword;
+
     [JsonIgnore]
     public bool IsTrashed => TrashedAt is not null;
 
@@ -33,7 +42,18 @@ public sealed class EntryData
         History = History.Select(h => h with { }).ToList(),
         Favorite = Favorite,
         TrashedAt = TrashedAt,
+        AutoTypeApps = [.. AutoTypeApps],
+        AutoType = AutoType,
     };
+}
+
+/// <summary>自動タイプで打ち込む内容（Enter は押さない）。</summary>
+public enum AutoTypeMode
+{
+    /// <summary>ユーザー ID → Tab → パスワード。</summary>
+    UsernameTabPassword,
+    /// <summary>パスワードだけ（ID が記憶されている画面など）。</summary>
+    PasswordOnly,
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

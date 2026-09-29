@@ -101,7 +101,7 @@ public class TutorialTests
         var t = Assert.IsType<TutorialViewModel>(h.Main.Tutorial);
 
         string[] expected = ["new", "search", "list", "detail-password", "filter", "generate", "import", "trash", "settings",
-            "settings-categories", "settings-browser", "settings-storage", "settings-hello", "lock", "theme"];
+            "settings-categories", "settings-browser", "settings-storage", "settings-autotype", "settings-hello", "lock", "theme"];
         Assert.Equal(expected, t.Steps.Select(s => s.Target).OfType<string>());
 
         WalkAllSteps(h, t, "29-tour", "new", "detail-password", "settings-browser", "theme");
@@ -184,7 +184,7 @@ public class TutorialTests
         vm.ShowSettingsCommand.Execute(null);
         var settings = Assert.IsType<SettingsViewModel>(vm.SubPage);
 
-        Assert.Equal(["一般", "表示", "セキュリティ", "保存先と同期", "ブラウザ連携", "更新", "使い方"], settings.Categories.Select(c => c.Label));
+        Assert.Equal(["一般", "表示", "セキュリティ", "保存先と同期", "ブラウザ連携", "アプリへの自動入力", "更新", "使い方"], settings.Categories.Select(c => c.Label));
         Assert.True(settings.IsGeneral); // 最初は「一般」
         h.Screenshot("30-settings-general");
 

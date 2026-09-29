@@ -281,6 +281,33 @@
                 </Border>
             </StackPanel>
 
+            <!-- アプリへの自動入力 -->
+            <StackPanel Spacing="16" IsVisible="{Binding IsAutoType}" local:Tour.Id="settings-autotype">
+                <Border Classes="card">
+                    <StackPanel Spacing="12">
+                        <TextBlock Classes="h2" Text="ゲーム・アプリのログイン画面に入力" />
+                        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                                   Text="FF14 のランチャーなど、ブラウザ以外のログイン画面で ID 欄をクリックしてからショートカットキーを押すと、エントリを選ぶ小さな窓が出ます。選ぶと、ID → Tab → パスワードの順にキーボードで打ったのと同じ形で入力します（Enter は押しません）。" />
+                        <CheckBox IsChecked="{Binding AutoTypeEnabled}" IsEnabled="{Binding AutoTypeSupported}" Content="ショートカットキーで自動入力する" />
+                        <Grid ColumnDefinitions="Auto,220" ColumnSpacing="12" IsEnabled="{Binding AutoTypeSupported}">
+                            <TextBlock VerticalAlignment="Center" Text="ショートカットキー" />
+                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding HotKeys}" SelectedItem="{Binding SelectedHotKey}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="svc:AutoTypeHotKey">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <TextBlock TextWrapping="Wrap" Text="{Binding AutoTypeStatus}" />
+                        <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="12">
+                            <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                       Text="・間違った画面に入力しないよう、エントリに「使うアプリ」を紐付けます。紐付けていないアプリに入力するときは確認が出ます（その場で紐付けもできます）。紐付けはエントリの編集画面でも変えられます。&#x0a;・打ち込む直前に、前面の画面が入力先のままか確かめ、変わっていたら入力を止めます。&#x0a;・ゲームによっては、自動で打ち込まれた文字を受け付けないことがあります。管理者として動いているアプリには入力できません。" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
             <!-- 更新 -->
             <StackPanel Spacing="16" IsVisible="{Binding IsUpdate}">
                 <Border Classes="card">

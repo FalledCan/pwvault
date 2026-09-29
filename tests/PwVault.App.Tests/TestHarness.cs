@@ -89,6 +89,54 @@ public sealed class FakeHello : IQuickUnlockProvider
     }
 }
 
+/// <summary>
+/// 自動タイプの OS 機能の代わり。前面のウィンドウはテストが決め、打ち込んだ内容は Typed に記録する（本物のキー入力はしない）。
+/// </summary>
+public sealed class FakeAutoType : IAutoTypePlatform
+{
+    public TargetWindow? Foreground { get; set; }
+    public List<string> Typed { get; } = [];
+    public AutoTypeHotKey? RegisteredKey { get; private set; }
+    public Action? PressHotKey { get; private set; }
+    public bool FailRegister { get; set; }
+    public bool ActivateSucceeds { get; set; } = true;
+
+    /// <summary>何か打ち込むたびに呼ばれる（途中で前面の画面が変わった状況を作るため）。</summary>
+    public Action? AfterEachInput { get; set; }
+
+    public TargetWindow? GetForeground() => Foreground;
+    public bool Activate(IntPtr handle) => ActivateSucceeds;
+
+    public void TypeText(string text)
+    {
+        Typed.Add(text);
+        AfterEachInput?.Invoke();
+    }
+
+    public void PressTab()
+    {
+        Typed.Add("<TAB>");
+        AfterEachInput?.Invoke();
+    }
+
+    public IDisposable? RegisterHotKey(AutoTypeHotKey key, Action onPressed)
+    {
+        if (FailRegister) return null;
+        RegisteredKey = key;
+        PressHotKey = onPressed;
+        return new Registration(this);
+    }
+
+    private sealed class Registration(FakeAutoType owner) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner.RegisteredKey = null;
+            owner.PressHotKey = null;
+        }
+    }
+}
+
 public sealed class MutableClock : TimeProvider
 {
     public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
@@ -130,6 +178,9 @@ public sealed class Harness : IDisposable
     /// <summary>レジストリはテスト用のキー、ファイルは一時フォルダに書く。</summary>
     public PwVault.App.Bridge.BrowserIntegration Integration { get; }
     public string RegistryBase { get; } = @"Software\PwVaultTest\" + Guid.NewGuid().ToString("N");
+
+    /// <summary>自動タイプの OS 機能の偽物（本物のショートカットキー登録・キー入力はしない）。</summary>
+    public FakeAutoType AutoType { get; } = new();
 
     /// <summary>一時フォルダの中だけを探す同期フォルダの探索。</summary>
     public SyncFolderLocator SyncFolders { get; }
@@ -173,8 +224,9 @@ public sealed class Harness : IDisposable
             documents: Path.Combine(Dir, "documents"), driveRoots: () => []);
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
             new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock,
-            AutoStart, SyncFolders);
+            AutoStart, SyncFolders, AutoType);
         Main.OpenInBrowser = OpenedUrls.Add;
+        Main.AutoTypeDelay = TimeSpan.Zero;
         Main.VaultSyncInterval = TimeSpan.FromHours(1); // テストでは SyncNow を直接呼ぶ
         Window.DataContext = Main;
         Window.Show();

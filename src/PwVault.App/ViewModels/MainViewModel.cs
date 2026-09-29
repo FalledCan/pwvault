@@ -46,9 +46,10 @@ public partial class MainViewModel : ViewModelBase
         BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
         UpdateService? updates = null,
         IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null,
-        AutoStart? autoStart = null, SyncFolderLocator? syncFolders = null)
+        AutoStart? autoStart = null, SyncFolderLocator? syncFolders = null, IAutoTypePlatform? autoTypePlatform = null)
     {
         AutoStart = autoStart ?? (AutoStart.IsSupported ? new AutoStart() : null);
+        AutoTypePlatform = autoTypePlatform ?? AutoTypePlatforms.CreateDefault();
         SyncFolders = syncFolders ?? new SyncFolderLocator();
         QuickUnlock = quickUnlock ?? QuickUnlockProviders.CreateDefault();
         LocalDataDir = localDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PwVault");
@@ -77,7 +78,57 @@ public partial class MainViewModel : ViewModelBase
         if (Settings.BrowserIntegration)
             ResumeBrowserIntegration();
         RepairAutoStart();
+        ApplyAutoTypeSettings();
     }
+
+    // ------------------------------------------------------------------ 自動タイプ（ゲーム・アプリのログイン画面への入力）
+
+    /// <summary>自動タイプで使う OS の機能（Windows 以外は null。テストでは偽物）。</summary>
+    public IAutoTypePlatform? AutoTypePlatform { get; }
+
+    public bool AutoTypeSupported => AutoTypePlatform is not null;
+
+    /// <summary>画面を切り替えてから打ち込むまでの待ち時間（テストでは 0）。</summary>
+    public TimeSpan AutoTypeDelay { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    private IDisposable? _autoTypeHotKey;
+
+    /// <summary>表示中の選択窓（無ければ null）。App がこれを見て小さなウィンドウを出す・閉じる。</summary>
+    [ObservableProperty]
+    public partial AutoTypePickerViewModel? AutoTypePicker { get; set; }
+
+    /// <summary>設定に合わせてショートカットキーを登録し直す。登録できなければ理由を返す。</summary>
+    public string? ApplyAutoTypeSettings()
+    {
+        _autoTypeHotKey?.Dispose();
+        _autoTypeHotKey = null;
+        if (AutoTypePlatform is null || !Settings.AutoTypeEnabled) return null;
+
+        var key = AutoTypeHotKey.Find(Settings.AutoTypeHotKeyId);
+        _autoTypeHotKey = AutoTypePlatform.RegisterHotKey(key, () => Dispatcher.UIThread.Post(OnAutoTypeHotKey));
+        return _autoTypeHotKey is null ? $"{key.Label} はほかのアプリが使っているため登録できませんでした。別のキーを選んでください。" : null;
+    }
+
+    /// <summary>
+    /// ショートカットキーが押された。押した瞬間に前面だった画面を入力先として覚え、選択窓を出す。
+    /// ロック中なら PwVault を前に出してアンロックを促す（アンロック後にもう一度押してもらう）。
+    /// </summary>
+    public void OnAutoTypeHotKey()
+    {
+        if (AutoTypePlatform?.GetForeground() is not { } target || target.ProcessId == Environment.ProcessId)
+            return; // PwVault 自身には入力しない
+        if (CurrentPage is not VaultViewModel { IsUnlocked: true } vault)
+        {
+            if (CurrentPage is UnlockViewModel unlock)
+                unlock.Info = $"自動入力するには、アンロックしてから {target.ProcessName} の画面でもう一度ショートカットキーを押してください。";
+            ShowRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        AutoLock.NotifyActivity();
+        AutoTypePicker = new AutoTypePickerViewModel(this, vault, AutoTypePlatform, target);
+    }
+
+    public void CloseAutoTypePicker() => AutoTypePicker = null;
 
     // ------------------------------------------------------------------ チュートリアル
 
@@ -493,7 +544,8 @@ public partial class MainViewModel : ViewModelBase
 
         if (CurrentPage is VaultViewModel vault)
         {
-            Tutorial = null; // 「この設定を開く」などは保管庫を開いている前提なので閉じる
+            Tutorial = null; // 案内は保管庫を開いている前提なので閉じる
+            AutoTypePicker = null;
             var path = vault.Close();
             CurrentPage = new UnlockViewModel(this, path);
         }
@@ -504,6 +556,8 @@ public partial class MainViewModel : ViewModelBase
     {
         if (Avalonia.Application.Current is { } app)
             app.ActualThemeVariantChanged -= OnActualThemeChanged;
+        _autoTypeHotKey?.Dispose();
+        _autoTypeHotKey = null;
         StopBridge();
         Lock();
         Clipboard.Dispose();

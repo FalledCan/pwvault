@@ -38,6 +38,12 @@ public sealed class AppSettings
     /// <summary>Windows Hello でのアンロックを、マスターパスワードなしで続けられる日数。過ぎたらマスターパスワードが必要。</summary>
     public int QuickUnlockDays { get; set; } = 14;
 
+    /// <summary>ゲーム・アプリのログイン画面への自動入力（ショートカットキー）を使うか。</summary>
+    public bool AutoTypeEnabled { get; set; }
+
+    /// <summary>自動入力のショートカットキー（<see cref="AutoTypeHotKey.Presets"/> の Id）。</summary>
+    public string AutoTypeHotKeyId { get; set; } = "CtrlAltA";
+
     /// <summary>チュートリアルを一度見た（または閉じた）か。保管庫を作った直後に自動で出すのは、まだのときだけ。</summary>
     public bool TutorialSeen { get; set; }
 

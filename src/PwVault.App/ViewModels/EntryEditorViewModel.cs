@@ -24,7 +24,20 @@ public partial class EntryEditorViewModel : ViewModelBase
         Notes = _original.Notes;
         TagsText = string.Join(", ", _original.Tags);
         Favorite = _original.Favorite;
+        AutoTypeAppsText = string.Join(", ", _original.AutoTypeApps);
+        AutoTypePasswordOnly = _original.AutoType == AutoTypeMode.PasswordOnly;
     }
+
+    /// <summary>自動入力の設定欄を出すか（Windows のみ）。</summary>
+    public bool AutoTypeSupported => _owner.Main.AutoTypeSupported;
+
+    /// <summary>自動入力してよいアプリ（カンマ区切りの実行ファイル名）。</summary>
+    [ObservableProperty]
+    public partial string AutoTypeAppsText { get; set; }
+
+    /// <summary>自動入力でパスワードだけを打つ（ID は打たない）。</summary>
+    [ObservableProperty]
+    public partial bool AutoTypePasswordOnly { get; set; }
 
     public bool IsNew => _id is null;
     public string Heading => IsNew ? "新しいエントリ" : "エントリを編集";
@@ -89,6 +102,8 @@ public partial class EntryEditorViewModel : ViewModelBase
         data.Tags = TagsText.Split([',', '、'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         data.Favorite = Favorite;
+        data.AutoTypeApps = AutoTypeMatcher.Parse(AutoTypeAppsText);
+        data.AutoType = AutoTypePasswordOnly ? AutoTypeMode.PasswordOnly : AutoTypeMode.UsernameTabPassword;
 
         _owner.CommitEditor(_id, data);
     }

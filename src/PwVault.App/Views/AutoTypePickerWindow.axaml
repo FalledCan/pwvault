@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PwVault.App.ViewModels"
+        x:Class="PwVault.App.Views.AutoTypePickerWindow"
+        x:DataType="vm:AutoTypePickerViewModel"
+        Title="PwVault 自動入力"
+        Icon="/Assets/avalonia-logo.ico"
+        Width="480" Height="460" CanResize="False"
+        WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="False"
+        Background="{DynamicResource PaneBackground}">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
+
+    <Panel>
+        <DockPanel Margin="16">
+            <StackPanel DockPanel.Dock="Top" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Image Source="/Assets/avalonia-logo.ico" Width="20" Height="20" />
+                    <TextBlock Classes="h2" Text="自動入力" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding TargetText, StringFormat='入力先: {0}'}" />
+                <TextBox x:Name="SearchBox" PlaceholderText="エントリを検索" Text="{Binding SearchText}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding ChooseCommand}" />
+                        <KeyBinding Gesture="Down" Command="{Binding MoveSelectionCommand}" CommandParameter="1" />
+                        <KeyBinding Gesture="Up" Command="{Binding MoveSelectionCommand}" CommandParameter="-1" />
+                    </TextBox.KeyBindings>
+                </TextBox>
+            </StackPanel>
+
+            <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
+                <TextBlock Classes="error" TextWrapping="Wrap" Text="{Binding Error}"
+                           IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="muted" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="ID → Tab → パスワードの順に入力します（Enter は押しません）" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="キャンセル" Command="{Binding CancelCommand}" />
+                        <Button Classes="accent" Content="入力" Command="{Binding ChooseCommand}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+
+            <Border Classes="card" Padding="4" Margin="0,10,0,0">
+                <Panel>
+                    <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !Items.Count}"
+                               Text="見つかりません。" />
+                    <ListBox x:Name="List" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
+                             Background="Transparent" DoubleTapped="OnDoubleTapped">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AutoTypeItem">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1" IsVisible="{Binding IsLinked}" Background="{DynamicResource SystemAccentColor}"
+                                            CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                        <TextBlock Text="このアプリ用" FontSize="11" Foreground="White" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Panel>
+            </Border>
+        </DockPanel>
+
+        <!-- 紐付けていないエントリを選んだときの確認 -->
+        <Panel IsVisible="{Binding Confirming, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Background="{DynamicResource OverlayBackground}">
+            <Border Classes="card" Margin="20" VerticalAlignment="Center">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="h2" Text="このアプリに入力しますか？" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding ConfirmText}" />
+                    <StackPanel Spacing="8">
+                        <Button Classes="accent" HorizontalAlignment="Stretch" Content="紐付けて入力（おすすめ）" Command="{Binding LinkAndTypeCommand}" />
+                        <Button HorizontalAlignment="Stretch" Content="今回だけ入力" Command="{Binding TypeOnceCommand}" />
+                        <Button HorizontalAlignment="Stretch" Content="やめる" Command="{Binding CancelConfirmCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Panel>
+    </Panel>
+</Window>

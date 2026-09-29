@@ -457,6 +457,17 @@ public partial class VaultViewModel : ViewModelBase
 
     public void CancelEditor() => Editor = null;
 
+    /// <summary>自動タイプの入力先アプリをエントリに紐付けて保存する（選択窓の「紐付けて入力」から）。</summary>
+    public void LinkAutoTypeApp(Guid id, string app)
+    {
+        if (Vault.GetEntry(id) is not { } entry || Core.Tools.AutoTypeMatcher.IsLinked(entry.Data, app)) return;
+        var data = entry.Data.Clone();
+        data.AutoTypeApps.Add(app);
+        Vault.UpdateEntry(id, data);
+        Persist();
+        Refresh();
+    }
+
     [RelayCommand]
     private void TrashEntry()
     {

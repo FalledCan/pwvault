@@ -7,7 +7,7 @@ using PwVault.Core.Tools;
 namespace PwVault.App.ViewModels;
 
 /// <summary>設定のカテゴリー（左の一覧）。</summary>
-public enum SettingsCategory { General, Display, Security, Storage, Browser, Update, Help }
+public enum SettingsCategory { General, Display, Security, Storage, Browser, AutoType, Update, Help }
 
 public sealed record SettingsCategoryItem(SettingsCategory Category, string Icon, string Label);
 
@@ -26,13 +26,14 @@ public partial class SettingsViewModel : ViewModelBase
         new(SettingsCategory.Security, "🔑", "セキュリティ"),
         new(SettingsCategory.Storage, "☁", "保存先と同期"),
         new(SettingsCategory.Browser, "🌐", "ブラウザ連携"),
+        new(SettingsCategory.AutoType, "⌨", "アプリへの自動入力"),
         new(SettingsCategory.Update, "⬆", "更新"),
         new(SettingsCategory.Help, "❓", "使い方"),
     ];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGeneral), nameof(IsDisplay), nameof(IsSecurity), nameof(IsStorage),
-        nameof(IsBrowser), nameof(IsUpdate), nameof(IsHelp))]
+        nameof(IsBrowser), nameof(IsAutoType), nameof(IsUpdate), nameof(IsHelp))]
     public partial SettingsCategoryItem? SelectedCategory { get; set; }
 
     private bool Is(SettingsCategory c) => SelectedCategory?.Category == c;
@@ -41,6 +42,7 @@ public partial class SettingsViewModel : ViewModelBase
     public bool IsSecurity => Is(SettingsCategory.Security);
     public bool IsStorage => Is(SettingsCategory.Storage);
     public bool IsBrowser => Is(SettingsCategory.Browser);
+    public bool IsAutoType => Is(SettingsCategory.AutoType);
     public bool IsUpdate => Is(SettingsCategory.Update);
     public bool IsHelp => Is(SettingsCategory.Help);
 
@@ -65,6 +67,7 @@ public partial class SettingsViewModel : ViewModelBase
         UpdateKdfCurrent();
         UpdateBrowserStatus();
         UpdateStorage();
+        LoadAutoType();
         LoadTheme();
         owner.Main.ThemeChanged += OnThemeChanged;
         FetchSiteIcons = s.FetchSiteIcons;
@@ -78,6 +81,37 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     public string VaultPath => _owner.Vault.FilePath;
+
+    // ---- アプリへの自動入力（ゲームのランチャーなど）
+
+    public bool AutoTypeSupported => _owner.Main.AutoTypeSupported;
+    public IReadOnlyList<Services.AutoTypeHotKey> HotKeys => Services.AutoTypeHotKey.Presets;
+    [ObservableProperty] public partial bool AutoTypeEnabled { get; set; }
+    [ObservableProperty] public partial Services.AutoTypeHotKey? SelectedHotKey { get; set; }
+    [ObservableProperty] public partial string? AutoTypeStatus { get; set; }
+
+    private void LoadAutoType()
+    {
+        AutoTypeEnabled = _owner.Main.Settings.AutoTypeEnabled;
+        SelectedHotKey = Services.AutoTypeHotKey.Find(_owner.Main.Settings.AutoTypeHotKeyId);
+        UpdateAutoTypeStatus(null);
+    }
+
+    partial void OnAutoTypeEnabledChanged(bool value) => ApplyAutoType();
+    partial void OnSelectedHotKeyChanged(Services.AutoTypeHotKey? value) => ApplyAutoType();
+
+    private void ApplyAutoType()
+    {
+        if (!_loaded || SelectedHotKey is null) return;
+        _owner.Main.Settings.AutoTypeEnabled = AutoTypeEnabled;
+        _owner.Main.Settings.AutoTypeHotKeyId = SelectedHotKey.Id;
+        _owner.Main.SaveSettings();
+        UpdateAutoTypeStatus(_owner.Main.ApplyAutoTypeSettings());
+    }
+
+    private void UpdateAutoTypeStatus(string? error) =>
+        AutoTypeStatus = !AutoTypeSupported ? "この OS では使えません（今は Windows だけ）。"
+            : error ?? (AutoTypeEnabled ? $"有効です。ゲームなどのログイン画面で {SelectedHotKey?.Label} を押してください。" : "無効です。");
 
     // ---- 保存先（この PC / Google ドライブ / Nextcloud / その他）
 

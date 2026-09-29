@@ -138,6 +138,13 @@ public partial class TutorialViewModel : ViewModelBase
                 () => Settings(SettingsCategory.Storage)),
         ]);
 
+        if (main.AutoTypeSupported)
+        {
+            steps.Add(new("settings-autotype", "⌨", "ゲーム・アプリへの自動入力",
+                "FF14 のランチャーなど、ブラウザ以外のログイン画面にも入力できます。ここで有効にして、ログイン画面でショートカットキーを押してください。",
+                () => Settings(SettingsCategory.AutoType)));
+        }
+
         if (main.QuickUnlock is { } hello)
         {
             steps.Add(new("settings-hello", "🙂", $"{hello.Name} ですばやく開く",
