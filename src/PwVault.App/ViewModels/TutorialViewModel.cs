@@ -3,43 +3,49 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace PwVault.App.ViewModels;
 
-/// <summary>チュートリアルの 1 ページ。<paramref name="Settings"/> があれば「この設定を開く」を出す（アンロック中だけ）。</summary>
-public sealed record TutorialStep(string Icon, string Title, string Body, SettingsCategory? Settings = null);
+/// <summary>
+/// チュートリアルの 1 ページ。<paramref name="Target"/> は照らす部品の目印（<c>Views.Tour.Id</c>）。null なら画面中央に説明だけを出す。
+/// <paramref name="Prepare"/> はそのページを見せる前に画面を整える処理（設定を開く、エントリを選ぶなど）。戻ったときにも毎回呼ぶ。
+/// </summary>
+public sealed record TutorialStep(string? Target, string Icon, string Title, string Body, Action? Prepare = null);
 
 /// <summary>
-/// 使い方の案内（画面の上に重ねて出す）。初回画面・保管庫を作った直後・「設定 → 使い方」から開く。
+/// 実際の画面の部品を順番に照らして案内するチュートリアル。
+/// 初回画面では保管庫の作り方を、保管庫を開いているときは一覧・設定などの使い方を案内する。
+/// 開き方: 初回画面の「使い方を見る」、保管庫を作った直後（初回だけ自動）、「設定 → 使い方」。
 /// </summary>
 public partial class TutorialViewModel : ViewModelBase
 {
     private readonly MainViewModel _main;
+    private readonly VaultViewModel? _vault;
 
     public TutorialViewModel(MainViewModel main)
     {
         _main = main;
-        Steps = BuildSteps(main.QuickUnlock?.Name);
+        _vault = main.CurrentPage as VaultViewModel;
+        Steps = _vault is not null ? BuildVaultSteps(_vault, main) : BuildSetupSteps(main.CurrentPage as SetupViewModel);
+        Steps[0].Prepare?.Invoke();
     }
 
     public IReadOnlyList<TutorialStep> Steps { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Current), nameof(IsFirst), nameof(IsLast), nameof(ProgressText), nameof(NextText),
-        nameof(CanOpenSettings), nameof(Progress))]
+    [NotifyPropertyChangedFor(nameof(Current), nameof(IsFirst), nameof(IsLast), nameof(ProgressText), nameof(NextText), nameof(Progress))]
     public partial int Index { get; set; }
+
+    partial void OnIndexChanged(int value) => Steps[value].Prepare?.Invoke();
 
     public TutorialStep Current => Steps[Index];
     public bool IsFirst => Index == 0;
     public bool IsLast => Index == Steps.Count - 1;
     public string ProgressText => $"{Index + 1} / {Steps.Count}";
     public double Progress => (Index + 1) * 100.0 / Steps.Count;
-    public string NextText => IsFirst ? "はじめる" : IsLast ? "完了" : "次へ";
-
-    /// <summary>「この設定を開く」を出すか（保管庫を開いているときだけ。初回画面では出さない）。</summary>
-    public bool CanOpenSettings => Current.Settings is not null && _main.CurrentPage is VaultViewModel;
+    public string NextText => IsFirst ? "はじめる" : IsLast ? "完了" : "次へ →";
 
     [RelayCommand]
     private void Next()
     {
-        if (IsLast) _main.CloseTutorial();
+        if (IsLast) Close();
         else Index++;
     }
 
@@ -49,73 +55,135 @@ public partial class TutorialViewModel : ViewModelBase
         if (!IsFirst) Index--;
     }
 
+    /// <summary>終わる（途中でやめるときも）。案内のために開いた設定などは閉じて、一覧に戻す。</summary>
     [RelayCommand]
-    private void Close() => _main.CloseTutorial();
-
-    [RelayCommand]
-    private void OpenSettings()
+    private void Close()
     {
-        if (Current.Settings is not { } category || _main.CurrentPage is not VaultViewModel vault) return;
-        _main.CloseTutorial();
-        vault.ShowSettingsAt(category);
+        if (_vault is { IsUnlocked: true } && _vault.SubPage is SettingsViewModel)
+            _vault.CloseSubPage();
+        _main.CloseTutorial(markSeen: _vault is not null);
     }
 
-    private static IReadOnlyList<TutorialStep> BuildSteps(string? quickUnlockName)
+    // ------------------------------------------------------------------ ページ
+
+    private static string Mod => OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+";
+
+    private static IReadOnlyList<TutorialStep> BuildVaultSteps(VaultViewModel vault, MainViewModel main)
     {
-        var mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+";
+        // 一覧の画面に戻す（編集中・設定などを閉じる）
+        void List()
+        {
+            vault.Editor = null;
+            if (vault.HasSubPage) vault.CloseSubPage();
+        }
+        void Settings(SettingsCategory category)
+        {
+            vault.Editor = null;
+            if (vault.SubPage is SettingsViewModel s) s.ShowCategory(category);
+            else vault.ShowSettingsAt(category);
+        }
+
         var steps = new List<TutorialStep>
         {
-            new("👋", "PwVault へようこそ",
-                "PwVault は、パスワードを暗号化して、この PC の 1 つのファイルにまとめて保存するアプリです。\n" +
-                "覚えるのは「マスターパスワード」1 つだけ。あとは PwVault が覚えます。\n\n" +
-                "この案内では、よく使う操作を順番に紹介します（約 2 分）。あとから「設定 → 使い方」でも見られます。"),
-            new("🔑", "マスターパスワードについて",
-                "保管庫を開く鍵です。どこにも保存されず、忘れると保管庫は二度と開けません（復旧の手段はありません）。\n\n" +
-                "・長め（12 文字以上）で、ほかでは使っていないものにする\n" +
-                "・紙に書いて、安全な場所に保管する（初回画面の「緊急キット」が使えます）",
-                SettingsCategory.Security),
-            new("＋", "パスワードを登録する",
-                $"一覧の上の「＋ 新規」（{mod}N）で、サイトのタイトル・ユーザー ID・パスワード・URL を登録します。\n\n" +
-                $"パスワード欄の「生成」や、上の「生成」（{mod}G）で、推測されにくいパスワードを作れます。\n" +
-                "ほかのアプリやブラウザからは「取込/書出」で CSV を取り込めます。"),
-            new("🔍", "探す・使う",
-                $"上の検索欄（{mod}F）に入力すると、すぐに絞り込めます。\n\n" +
-                $"・ユーザー ID をコピー: {mod}B　・パスワードをコピー: {(OperatingSystem.IsMacOS() ? "⇧⌘C" : "Ctrl+Shift+C")}\n" +
-                "・コピーした内容は、しばらくすると自動でクリップボードから消えます\n" +
-                "・一覧をダブルクリックすると、そのサイトを開けます"),
-            new("🛡", "パスワードの健康診断",
-                "左上の絞り込みで「⚠ 弱いパスワード」「⚠ 使い回し」を選ぶと、見直した方がよいエントリが分かります。\n\n" +
-                "パスワードを変えると、前のパスワードは「履歴」に残るので、変更の途中で失敗しても戻せます。\n" +
-                "消したエントリは、しばらく「ゴミ箱」に残ります。"),
-            new("🌐", "ブラウザで自動入力",
-                "Chrome・Edge・Firefox の入力欄を右クリックして「PwVault」を選ぶと、そのサイトのユーザー ID とパスワードを入力できます。\n\n" +
-                "使うには「設定 → ブラウザ連携」で有効にして、表示される手順でブラウザに拡張機能を入れてください。",
-                SettingsCategory.Browser),
-            new("☁", "ほかの PC と共有する",
-                "Google ドライブ（パソコン版）や Nextcloud を使っていれば、「設定 → 保存先と同期」で保管庫をそちらに移せます。\n" +
-                "2 台目の PC では、初回画面の「○○の保管庫を開く」から同じ保管庫を開けます。\n\n" +
-                "複数の PC で同時に使っても、変更は自動でまとめられます。PwVault 自体は通信しません。",
-                SettingsCategory.Storage),
+            new(null, "👋", "PwVault へようこそ",
+                "実際の画面で、よく使うところを順番に案内します（約 2 分）。\n照らされた部分を見ながら「次へ」で進んでください。途中でやめても、「設定 → 使い方」からいつでも見られます。",
+                List),
+            new("new", "＋", "パスワードを登録する",
+                $"ここから、サイトのタイトル・ユーザー ID・パスワード・URL を登録します（{Mod}N）。\n編集画面の「生成」で、推測されにくいパスワードを作れます。",
+                List),
+            new("search", "🔍", "探す",
+                $"入力すると、タイトル・ユーザー ID・URL・タグからすぐに絞り込みます（{Mod}F）。",
+                List),
+            new("list", "📋", "一覧",
+                "登録したエントリが並びます。選ぶと右に詳しい内容が出ます。ダブルクリックでそのサイトを開きます。",
+                List),
         };
-        if (quickUnlockName is not null)
-            steps.Add(new("🙂", $"{quickUnlockName} ですばやく開く",
-                $"「設定 → セキュリティ」で {quickUnlockName} を有効にすると、顔認証・指紋・PIN でアンロックできます。\n" +
-                "忘れないよう、一定の日数ごとにマスターパスワードでのアンロックが必要です。",
-                SettingsCategory.Security));
+
+        if (vault.Items.Count > 0)
+        {
+            steps.Add(new("detail-password", "📎", "コピーして使う",
+                $"「コピー」でパスワードをコピーできます（{(OperatingSystem.IsMacOS() ? "⇧⌘C" : "Ctrl+Shift+C")}。ユーザー ID は {Mod}B）。\nコピーした内容は、しばらくすると自動でクリップボードから消えます。",
+                () =>
+                {
+                    List();
+                    vault.SelectedItem ??= vault.Items.FirstOrDefault();
+                }));
+        }
+
         steps.AddRange(
         [
-            new("🔒", "ロックについて",
-                $"しばらく操作しないと、自動でロックされます（時間は「設定 → 一般」で変更）。すぐにロックするには「🔒 ロック」（{mod}L）。\n" +
-                "PC のロックやスリープでも、すぐにロックされます。",
-                SettingsCategory.General),
-            new("🎨", "見た目を変える",
-                "一覧画面の右下のボタンで、ライト / ダークを切り替えられます。「設定 → 表示」では、ボタンなどの色も選べます。",
-                SettingsCategory.Display),
-            new("✅", "準備ができました",
-                "困ったときは:\n" +
-                "・保存のたびに、前の版を「.bak」として残しています（壊れたときは、ロック画面から復元できます）\n" +
-                "・「取込/書出」から、暗号化したバックアップを別の場所に保存できます\n\n" +
-                "この案内は、「設定 → 使い方」からいつでも見られます。"),
+            new("filter", "🛡", "パスワードの健康診断",
+                "ここで「⚠ 弱いパスワード」「⚠ 使い回し」を選ぶと、見直した方がよいエントリだけを表示します。タグやお気に入りでも絞り込めます。",
+                List),
+            new("generate", "🎲", "パスワードの生成",
+                $"長さや文字の種類を選んで、推測されにくいパスワードを作ります（{Mod}G）。",
+                List),
+            new("import", "📥", "取り込みとバックアップ",
+                "ほかのアプリやブラウザのパスワード（CSV）を取り込めます。暗号化したバックアップを別の場所に保存することもできます。",
+                List),
+            new("trash", "🗑", "ゴミ箱",
+                "消したエントリはしばらくここに残り、元に戻せます。",
+                List),
+            new("settings", "⚙", "設定",
+                "自動ロックの時間、見た目、保存先、ブラウザ連携などはここで変えます。続けて中を案内します。",
+                List),
+            new("settings-categories", "🗂", "設定のカテゴリー",
+                "左のカテゴリーを選ぶと、その設定だけが右に出ます。",
+                () => Settings(SettingsCategory.General)),
+            new("settings-browser", "🌐", "ブラウザで自動入力",
+                "ここで「有効にする」を押し、表示される手順で拡張機能を入れると、Chrome・Edge・Firefox の入力欄の右クリックから入力できます。",
+                () => Settings(SettingsCategory.Browser)),
+            new("settings-storage", "☁", "ほかの PC と共有",
+                "Google ドライブや Nextcloud のフォルダに保管庫を移すと、ほかの PC でも同じ保管庫を使えます。PwVault 自体は通信しません。",
+                () => Settings(SettingsCategory.Storage)),
+        ]);
+
+        if (main.QuickUnlock is { } hello)
+        {
+            steps.Add(new("settings-hello", "🙂", $"{hello.Name} ですばやく開く",
+                $"ここで有効にすると、顔認証・指紋・PIN でアンロックできます。",
+                () => Settings(SettingsCategory.Security)));
+        }
+
+        steps.AddRange(
+        [
+            new("lock", "🔒", "ロック",
+                $"すぐにロックします（{Mod}L）。しばらく操作しないときや、PC のロック・スリープでも自動でロックされます。",
+                List),
+            new("theme", "🎨", "見た目",
+                "ライトとダークを切り替えます。ボタンなどの色は「設定 → 表示」で選べます。",
+                List),
+            new(null, "✅", "準備ができました",
+                "保存のたびに前の版を「.bak」として残しているので、ファイルが壊れてもロック画面から戻せます。\nこの案内は「設定 → 使い方」からいつでも見られます。",
+                List),
+        ]);
+        return steps;
+    }
+
+    private static IReadOnlyList<TutorialStep> BuildSetupSteps(SetupViewModel? setup)
+    {
+        var steps = new List<TutorialStep>
+        {
+            new(null, "👋", "PwVault へようこそ",
+                "PwVault は、パスワードを暗号化して、この PC の 1 つのファイルにまとめて保存するアプリです。覚えるのは「マスターパスワード」1 つだけです。\nまず、この画面で保管庫を作ります。"),
+        };
+        if (setup is { HasCloudVaults: true })
+        {
+            steps.Add(new("setup-cloud", "☁", "ほかの PC の保管庫",
+                "ほかの PC で作った保管庫が同期フォルダにあります。同じ保管庫を使うなら、新しく作らずにこちらを開いてください。"));
+        }
+        steps.AddRange(
+        [
+            new("setup-path", "📁", "保存先",
+                "保管庫のファイルを置く場所です。ふつうはこのままで大丈夫です。あとから「設定 → 保存先と同期」で Google ドライブなどに移せます。"),
+            new("setup-password", "🔑", "マスターパスワード",
+                "保管庫を開く鍵です。12 文字以上で、ほかでは使っていないものにしてください。\nどこにも保存されず、忘れると保管庫は二度と開けません。"),
+            new("setup-kit", "📝", "緊急キット",
+                "マスターパスワードを書き留めておく用紙です。印刷して手書きで記入し、安全な場所に保管してください。"),
+            new("setup-open", "📂", "既存の保管庫を開く",
+                "前に作った保管庫のファイルがあれば、ここから開きます。"),
+            new("setup-create", "✨", "作成",
+                "入力できたら「作成」を押します。作成したあと、一覧の画面の使い方も案内します。"),
         ]);
         return steps;
     }

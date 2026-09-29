@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:PwVault.App.ViewModels"
              xmlns:svc="using:PwVault.App.Services"
+             xmlns:local="using:PwVault.App.Views"
              x:Class="PwVault.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
     <Grid ColumnDefinitions="220,*">
@@ -12,7 +13,7 @@
                     <TextBlock Classes="h1" Text="設定" />
                     <Button Content="← 一覧に戻る" HorizontalAlignment="Stretch" Command="{Binding BackCommand}" />
                 </StackPanel>
-                <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Background="Transparent">
+                <ListBox local:Tour.Id="settings-categories" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Background="Transparent">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:SettingsCategoryItem">
                             <StackPanel Orientation="Horizontal" Spacing="10" Margin="2,4">
@@ -150,7 +151,7 @@
                         <TextBlock TextWrapping="Wrap" Text="{Binding PasswordStatus}" />
                     </StackPanel>
                 </Border>
-                <Border Classes="card" IsVisible="{Binding QuickUnlockSupported}">
+                <Border Classes="card" IsVisible="{Binding QuickUnlockSupported}" local:Tour.Id="settings-hello">
                     <StackPanel Spacing="10">
                         <TextBlock Classes="h2" Text="{Binding QuickUnlockName, StringFormat='{}{0} でアンロック'}" />
                         <TextBlock Classes="muted" FontSize="13"
@@ -207,7 +208,7 @@
             </StackPanel>
 
             <!-- 保存先と同期 -->
-            <StackPanel Spacing="16" IsVisible="{Binding IsStorage}">
+            <StackPanel Spacing="16" IsVisible="{Binding IsStorage}" local:Tour.Id="settings-storage">
                 <Border Classes="card">
                     <StackPanel Spacing="12">
                         <TextBlock Classes="h2" Text="保存先（ほかの PC と共有）" />
@@ -236,7 +237,7 @@
             </StackPanel>
 
             <!-- ブラウザ連携 -->
-            <StackPanel Spacing="16" IsVisible="{Binding IsBrowser}">
+            <StackPanel Spacing="16" IsVisible="{Binding IsBrowser}" local:Tour.Id="settings-browser">
                 <Border Classes="card">
                     <StackPanel Spacing="12">
                         <TextBlock Classes="h2" Text="ブラウザ連携（右クリックで自動入力）" />

@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.TourOverlay"
+             x:DataType="vm:TutorialViewModel">
+    <!-- 画面全体を暗くし、案内する部品のところだけ穴を開けて照らす。横に説明の吹き出しを出す -->
+    <Canvas x:Name="Root" Background="Transparent">
+        <Path x:Name="Dim" Fill="{DynamicResource OverlayBackground}" />
+        <Border x:Name="Ring" BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="3" CornerRadius="10"
+                IsHitTestVisible="False" IsVisible="False" />
+        <Border x:Name="Bubble" Classes="card" Width="400" BoxShadow="0 8 32 0 #55000000">
+            <StackPanel Spacing="10">
+                <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="4" MinHeight="4" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Current.Icon}" FontSize="22" VerticalAlignment="Center" />
+                    <TextBlock Classes="h2" Text="{Binding Current.Title}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
+                </StackPanel>
+                <TextBlock Text="{Binding Current.Body}" TextWrapping="Wrap" LineHeight="21" />
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
+                    <Button Content="スキップ" Command="{Binding CloseCommand}" IsVisible="{Binding !IsLast}" />
+                    <TextBlock Grid.Column="1" Classes="muted" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Text="{Binding ProgressText}" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <Button Content="← 戻る" IsVisible="{Binding !IsFirst}" Command="{Binding BackCommand}" />
+                        <Button x:Name="NextButton" Classes="accent" Content="{Binding NextText}" Command="{Binding NextCommand}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Canvas>
+</UserControl>

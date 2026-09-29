@@ -88,10 +88,13 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     public void StartTutorial() => Tutorial = new TutorialViewModel(this);
 
-    public void CloseTutorial()
+    /// <param name="markSeen">
+    /// 見たことを記録するか。初回画面の案内では記録しない（保管庫を作った直後に、一覧の画面の案内を出すため）。
+    /// </param>
+    public void CloseTutorial(bool markSeen = true)
     {
         Tutorial = null;
-        if (!Settings.TutorialSeen)
+        if (markSeen && !Settings.TutorialSeen)
         {
             Settings.TutorialSeen = true;
             SaveSettings();

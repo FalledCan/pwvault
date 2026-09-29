@@ -23,16 +23,16 @@
             <Border DockPanel.Dock="Top" Classes="titlebar">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
                     <local:AppTitle />
-                    <TextBox Grid.Column="1" x:Name="SearchBox" MaxWidth="520" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                    <TextBox Grid.Column="1" x:Name="SearchBox" local:Tour.Id="search" MaxWidth="520" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                              PlaceholderText="{x:Static svc:Shortcuts.SearchPlaceholder}"
                              Text="{Binding SearchText}" IsEnabled="{Binding !HasSubPage}" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Button Classes="accent" Content="＋ 新規" ToolTip.Tip="{x:Static svc:Shortcuts.NewTip}" Command="{Binding NewEntryCommand}" />
-                        <Button Content="生成" ToolTip.Tip="{x:Static svc:Shortcuts.GenerateTip}" Command="{Binding ShowGeneratorCommand}" />
-                        <Button Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
-                        <Button Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
-                        <Button Content="設定" Command="{Binding ShowSettingsCommand}" />
-                        <Button Content="🔒 ロック" ToolTip.Tip="{x:Static svc:Shortcuts.LockTip}" Command="{Binding LockCommand}" />
+                        <Button local:Tour.Id="new" Classes="accent" Content="＋ 新規" ToolTip.Tip="{x:Static svc:Shortcuts.NewTip}" Command="{Binding NewEntryCommand}" />
+                        <Button local:Tour.Id="generate" Content="生成" ToolTip.Tip="{x:Static svc:Shortcuts.GenerateTip}" Command="{Binding ShowGeneratorCommand}" />
+                        <Button local:Tour.Id="import" Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
+                        <Button local:Tour.Id="trash" Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
+                        <Button local:Tour.Id="settings" Content="設定" Command="{Binding ShowSettingsCommand}" />
+                        <Button local:Tour.Id="lock" Content="🔒 ロック" ToolTip.Tip="{x:Static svc:Shortcuts.LockTip}" Command="{Binding LockCommand}" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -44,7 +44,7 @@
                     <TextBlock FontSize="12" Classes="muted" VerticalAlignment="Center" Text="{Binding Status}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
                     <TextBlock Grid.Column="1" FontSize="12" Classes="success" VerticalAlignment="Center" Text="{Binding ClipboardStatus}" TextWrapping="NoWrap" />
                     <TextBlock Grid.Column="2" FontSize="12" Classes="muted" VerticalAlignment="Center" Text="{Binding CountText}" TextWrapping="NoWrap" />
-                    <Button Grid.Column="3" Classes="statusbar" Content="{Binding Main.ThemeToggleText}"
+                    <Button Grid.Column="3" local:Tour.Id="theme" Classes="statusbar" Content="{Binding Main.ThemeToggleText}"
                             ToolTip.Tip="ライト / ダークを切り替える（色は「設定」で選べます）" Command="{Binding Main.ToggleThemeCommand}" />
                 </Grid>
             </Border>
@@ -57,7 +57,7 @@
                 <Grid ColumnDefinitions="340,*" IsVisible="{Binding !HasSubPage}">
                     <DockPanel Margin="12,12,6,12">
                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,*" ColumnSpacing="6" Margin="0,0,0,8">
-                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter}">
+                            <ComboBox local:Tour.Id="filter" HorizontalAlignment="Stretch" ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:FilterOption">
                                         <TextBlock Text="{Binding Label}" />
@@ -72,7 +72,7 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </Grid>
-                        <Border Classes="card" Padding="4">
+                        <Border local:Tour.Id="list" Classes="card" Padding="4">
                             <Panel>
                                 <TextBlock Classes="muted" Margin="16" HorizontalAlignment="Center" TextAlignment="Center"
                                            IsVisible="{Binding !Items.Count}"
@@ -159,7 +159,7 @@
 
                                     <StackPanel>
                                         <TextBlock Classes="label" Text="パスワード" />
-                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                        <Grid local:Tour.Id="detail-password" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                             <TextBox IsReadOnly="True" PasswordChar="●" FontFamily="Consolas, monospace"
                                                      RevealPassword="{Binding RevealPassword}"
                                                      Text="{Binding SelectedItem.Entry.Data.Password}" />

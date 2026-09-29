@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:PwVault.App.ViewModels"
+             xmlns:local="using:PwVault.App.Views"
              x:Class="PwVault.App.Views.SetupView"
              x:DataType="vm:SetupViewModel">
     <ScrollViewer>
@@ -19,7 +20,7 @@
                 </Grid>
 
                 <!-- 2 台目の PC: 同期フォルダに既にある保管庫を開く -->
-                <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14" IsVisible="{Binding HasCloudVaults}">
+                <Border local:Tour.Id="setup-cloud" Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14" IsVisible="{Binding HasCloudVaults}">
                     <StackPanel Spacing="8">
                         <TextBlock FontWeight="SemiBold" Text="ほかの PC で作った保管庫が見つかりました" />
                         <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
@@ -41,7 +42,7 @@
 
                 <StackPanel>
                     <TextBlock Classes="label" Text="保存先" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Grid local:Tour.Id="setup-path" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <TextBox Text="{Binding VaultPath}" />
                         <Button Grid.Column="1" Content="参照…" Command="{Binding BrowseCommand}" />
                     </Grid>
@@ -49,7 +50,7 @@
 
                 <StackPanel>
                     <TextBlock Classes="label" Text="マスターパスワード（12 文字以上）" />
-                    <TextBox x:Name="PasswordBox" PasswordChar="●" Text="{Binding Password}" />
+                    <TextBox x:Name="PasswordBox" local:Tour.Id="setup-password" PasswordChar="●" Text="{Binding Password}" />
                     <ProgressBar Classes="strength" Margin="0,6,0,0" Value="{Binding StrengthValue}" />
                     <TextBlock Classes="muted" FontSize="12" Margin="0,4,0,0" Text="{Binding StrengthText}" />
                     <TextBlock Classes="error" FontSize="12" IsVisible="{Binding IsTooShort}"
@@ -61,7 +62,7 @@
                     <TextBox PasswordChar="●" Text="{Binding ConfirmPassword}" />
                 </StackPanel>
 
-                <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14">
+                <Border local:Tour.Id="setup-kit" Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14">
                     <StackPanel Spacing="8">
                         <TextBlock FontWeight="SemiBold" Text="緊急キットについて" />
                         <TextBlock Classes="muted" FontSize="13"
@@ -76,11 +77,11 @@
                            IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                 <Grid ColumnDefinitions="*,Auto">
-                    <Button Content="既存の保管庫を開く…" Command="{Binding OpenExistingCommand}" />
+                    <Button local:Tour.Id="setup-open" Content="既存の保管庫を開く…" Command="{Binding OpenExistingCommand}" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                         <TextBlock VerticalAlignment="Center" Classes="muted" IsVisible="{Binding IsBusy}"
                                    Text="この PC に合わせて暗号の強さを調整中…" />
-                        <Button Classes="accent" Content="作成" IsDefault="True"
+                        <Button local:Tour.Id="setup-create" Classes="accent" Content="作成" IsDefault="True"
                                 IsEnabled="{Binding !IsBusy}" Command="{Binding CreateCommand}" />
                     </StackPanel>
                 </Grid>
