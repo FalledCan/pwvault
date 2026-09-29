@@ -21,7 +21,8 @@ public partial class TrashViewModel : ViewModelBase
 
     public bool IsEmpty => Items.Count == 0;
 
-    private void Reload()
+    /// <summary>一覧を保管庫の内容から作り直す（ほかの端末の変更を取り込んだときにも呼ばれる）。</summary>
+    public void Reload()
     {
         Items.Clear();
         foreach (var e in _owner.Vault.GetEntries().Where(e => e.Data.IsTrashed).OrderByDescending(e => e.Data.TrashedAt))
@@ -33,7 +34,7 @@ public partial class TrashViewModel : ViewModelBase
     [RelayCommand]
     private void Restore(TrashItem? item)
     {
-        if (item is null) return;
+        if (item is null || GoneElsewhere(item)) return;
         _owner.Vault.RestoreFromTrash(item.Id);
         Status = _owner.Persist() ? $"「{item.Title}」を元に戻しました。" : _owner.Status;
         Reload();
@@ -42,9 +43,10 @@ public partial class TrashViewModel : ViewModelBase
     [RelayCommand]
     private async Task PurgeAsync(TrashItem? item)
     {
-        if (item is null) return;
+        if (item is null || GoneElsewhere(item)) return;
         if (!await _owner.Main.ConfirmAsync("完全に削除", $"「{item.Title}」を完全に削除します。元に戻せません。", "完全に削除", isDanger: true))
             return;
+        if (GoneElsewhere(item)) return; // 確認している間に取り込まれた
         _owner.Vault.Purge(item.Id);
         Status = _owner.Persist() ? $"「{item.Title}」を完全に削除しました。" : _owner.Status;
         Reload();
@@ -59,6 +61,15 @@ public partial class TrashViewModel : ViewModelBase
         _owner.Vault.EmptyTrash();
         Status = _owner.Persist() ? "ゴミ箱を空にしました。" : _owner.Status;
         Reload();
+    }
+
+    /// <summary>ほかの端末で完全削除され、もう保管庫に無いか（あれば案内して一覧を作り直す）。</summary>
+    private bool GoneElsewhere(TrashItem item)
+    {
+        if (_owner.Vault.GetEntry(item.Id) is not null) return false;
+        Status = $"「{item.Title}」はほかの端末で削除されています。";
+        Reload();
+        return true;
     }
 
     [RelayCommand]

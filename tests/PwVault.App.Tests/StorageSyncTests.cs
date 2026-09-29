@@ -163,6 +163,99 @@ public class StorageSyncTests
     }
 
     [AvaloniaFact]
+    public async Task TrashPage_ItemPurgedOnAnotherPc_DoesNotCrash()
+    {
+        using var h = new Harness();
+        var vm = await UnlockNew(h, h.VaultPath, "捨てたもの", "もう 1 つ");
+        foreach (var item in vm.Items.ToList()) vm.Vault.MoveToTrash(item.Id);
+        vm.Persist();
+        vm.ShowTrashCommand.Execute(null);
+        var trash = Assert.IsType<TrashViewModel>(vm.SubPage);
+        Assert.Equal(2, trash.Items.Count);
+        var stale = trash.Items.Single(i => i.Title == "捨てたもの");
+
+        // ゴミ箱を開いている間に、ほかの PC が「捨てたもの」を完全削除した
+        using (var otherPc = Vault.Open(h.VaultPath, Master))
+        {
+            otherPc.Purge(otherPc.GetEntries().Single(e => e.Data.Title == "捨てたもの").Id);
+            otherPc.Save(3);
+        }
+        vm.SyncNow();
+        Assert.Single(trash.Items); // 取り込んだらゴミ箱の一覧も更新される
+
+        // 古い一覧の項目を押しても落ちない
+        trash.RestoreCommand.Execute(stale);
+        Assert.Contains("ほかの端末で削除", trash.Status);
+        var purge = trash.PurgeCommand.ExecuteAsync(stale);
+        await purge;
+        Assert.Contains("ほかの端末で削除", trash.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Startup_VaultInSyncFolderNotReadyYet_ShowsUnlockAndWaits()
+    {
+        // サインイン直後など、同期フォルダ（Google ドライブの G: など）がまだ準備できていない
+        var cloud = Path.Combine(Path.GetTempPath(), "pwvault-notready-" + Guid.NewGuid().ToString("N"), "PwVault", "vault.pwv");
+        using var h = new Harness(s => s.VaultPath = cloud);
+
+        // 初回セットアップ（新しい保管庫の作成）ではなく、いつものアンロック画面で待つ
+        var unlock = h.Page<UnlockViewModel>();
+        Assert.Equal(cloud, unlock.VaultPath);
+        Assert.Contains("見つかりません", unlock.Error);
+        h.Screenshot("25-unlock-waiting-for-sync-folder");
+
+        // 同期フォルダが準備できてファイルが現れたら、案内が消えてアンロックできる
+        Directory.CreateDirectory(Path.GetDirectoryName(cloud)!);
+        Vault.Create(cloud, Master, FastKdf()).Dispose();
+        try
+        {
+            unlock.CheckVaultFile();
+            Assert.Null(unlock.Error);
+            unlock.Password = Master;
+            await unlock.UnlockCommand.ExecuteAsync(null);
+            h.Page<VaultViewModel>();
+        }
+        finally
+        {
+            h.Main.Lock();
+            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(cloud))!, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Lock_WhenSaveKeepsFailing_RescuesChangesInsteadOfDroppingThem()
+    {
+        using var h = new Harness();
+        var vm = await UnlockNew(h, h.VaultPath, "元からある");
+        var good = File.ReadAllBytes(h.VaultPath);
+
+        // ファイルが読めない状態（改ざん・壊れた同期など）になり、保存が失敗し続ける
+        var doc = Core.Format.VaultFileCodec.Deserialize(good);
+        var e = doc.Entries[0];
+        var forged = doc with { Entries = [new Core.Format.EncryptedEntry { Id = e.Id, Revision = e.Revision + 9, UpdatedAt = e.UpdatedAt, Deleted = e.Deleted, Box = e.Box }] };
+        File.WriteAllBytes(h.VaultPath, Core.Format.VaultFileCodec.Serialize(forged));
+
+        vm.Vault.AddEntry(Entry("ロック直前に追加"));
+        Assert.False(vm.Persist());
+        h.Main.Lock(); // 自動ロックでも同じ
+
+        var rescue = Assert.Single(Directory.GetFiles(h.Dir, "vault (保存できなかった変更 *).pwv"));
+        var unlock = h.Page<UnlockViewModel>();
+        Assert.Contains("退避しました", unlock.Error);
+        Assert.Contains(rescue, unlock.Error);
+        using (var rescued = Vault.Open(rescue, Master))
+            Assert.Contains(rescued.GetEntries(), x => x.Data.Title == "ロック直前に追加");
+
+        // 保管庫ファイルを .bak などから戻して開き直すと、退避した変更は自動で取り込まれる
+        File.WriteAllBytes(h.VaultPath, good);
+        unlock.Password = Master;
+        await unlock.UnlockCommand.ExecuteAsync(null);
+        vm = h.Page<VaultViewModel>();
+        Assert.Equal(["ロック直前に追加", "元からある"], Titles(vm));
+        Assert.False(File.Exists(rescue));
+    }
+
+    [AvaloniaFact]
     public async Task SetupOnSecondPc_OffersVaultFoundInSyncFolder()
     {
         using var h = new Harness();

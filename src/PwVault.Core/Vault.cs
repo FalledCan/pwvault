@@ -284,6 +284,23 @@ public sealed class Vault : IDisposable
         IsDirty = false;
     }
 
+    /// <summary>
+    /// 今の内容（暗号化済み）を別のファイルに書く。ファイルの読み直し・合体はしない。
+    /// 保存できないままロックするときの退避用（変更をメモリごと捨てないため）。
+    /// </summary>
+    public void SaveCopyTo(string path)
+    {
+        EnsureUnlocked();
+        try
+        {
+            AtomicFileStore.Write(path, ToBytes(), backupGenerations: 0);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new VaultException(VaultErrorKind.Io, "保管庫を保存できませんでした。", ex);
+        }
+    }
+
     // ------------------------------------------------------------------ 複数の端末での利用（同期フォルダ）
 
     /// <summary>

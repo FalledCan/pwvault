@@ -22,9 +22,38 @@ public partial class UnlockViewModel : ViewModelBase
         _main = main;
         VaultPath = vaultPath;
         QuickUnlockReady = InitQuickUnlockAsync();
+        if (!File.Exists(vaultPath))
+        {
+            Error = MissingFileMessage;
+            _fileWatch = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _fileWatch.Tick += (_, _) => CheckVaultFile();
+            _fileWatch.Start();
+        }
+        // ロック時に保存できなかった変更を退避した、など（ファイルが見つからない案内より優先して見せる）
+        if (main.LockNotice is { } notice)
+        {
+            Error = notice;
+            main.LockNotice = null;
+        }
     }
 
     public string VaultPath { get; }
+
+    private const string MissingFileMessage =
+        "保管庫ファイルが見つかりません。Google ドライブなどの同期フォルダに置いている場合は、準備ができるまで少しお待ちください（見つかりしだいアンロックできます）。" +
+        "\n移動・削除した場合は「別の保管庫を開く…」から選んでください。";
+
+    private Avalonia.Threading.DispatcherTimer? _fileWatch;
+
+    /// <summary>見つからなかった保管庫ファイルが現れたか確かめる（2 秒ごと）。現れたら案内を消し、Windows Hello を使えるようにする。</summary>
+    public void CheckVaultFile()
+    {
+        if (_main.CurrentPage != this) { _fileWatch?.Stop(); return; } // 別の画面に移った
+        if (!File.Exists(VaultPath)) return;
+        _fileWatch?.Stop();
+        if (Error == MissingFileMessage) Error = null;
+        _ = InitQuickUnlockAsync().ContinueWith(_ => TryAutoQuickUnlock(), TaskScheduler.FromCurrentSynchronizationContext());
+    }
 
     // ------------------------------------------------------------------ Windows Hello
 

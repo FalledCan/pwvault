@@ -68,7 +68,9 @@ public partial class MainViewModel : ViewModelBase
         if (Avalonia.Application.Current is { } app)
             app.ActualThemeVariantChanged += OnActualThemeChanged;
 
-        CurrentPage = Settings.VaultPath is { } path && File.Exists(path)
+        // 前回の保管庫の場所があれば、ファイルが見つからなくてもアンロック画面にする
+        // （同期フォルダの準備がまだで一時的に見えないだけのことがある。初回画面で別の保管庫を作らせない）
+        CurrentPage = Settings.VaultPath is { Length: > 0 } path
             ? new UnlockViewModel(this, path)
             : new SetupViewModel(this);
 
@@ -398,6 +400,9 @@ public partial class MainViewModel : ViewModelBase
     }
 
     public bool IsUnlocked => CurrentPage is VaultViewModel;
+
+    /// <summary>ロック時に伝えたいこと（保存できなかった変更の退避先など）。次のアンロック画面が表示して消す。</summary>
+    public string? LockNotice { get; set; }
 
     /// <summary>ロック（FR-03）。鍵を破棄し、アプリがコピーしたクリップボードの中身も消す。</summary>
     [RelayCommand]

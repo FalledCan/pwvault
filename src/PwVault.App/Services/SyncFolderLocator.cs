@@ -144,9 +144,10 @@ public sealed partial class SyncFolderLocator
     private static IEnumerable<string> DefaultDriveRoots()
     {
         if (!OperatingSystem.IsWindows()) return [];
-        // CD ドライブなどは準備の確認に時間がかかることがあるので見ない
+        // Google ドライブの仮想ドライブは「ローカル ディスク」扱い。つながっていないネットワークドライブや
+        // CD ドライブは、存在の確認だけで数秒以上待たされることがある（画面が固まる）ので見ない
         return DriveInfo.GetDrives()
-            .Where(d => d.DriveType is DriveType.Fixed or DriveType.Network or DriveType.Removable)
+            .Where(d => d.DriveType is DriveType.Fixed)
             .Select(d => d.RootDirectory.FullName);
     }
 

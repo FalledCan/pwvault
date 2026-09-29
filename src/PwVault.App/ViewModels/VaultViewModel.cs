@@ -250,6 +250,28 @@ public partial class VaultViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// ロックする時点で保存できなかった変更を、暗号化したまま別名のファイルに退避する（メモリごと捨てないため）。
+    /// 名前は同期アプリの競合コピーと同じ形（「元の名前 (…).pwv」）にするので、同じ保管庫なら次のアンロックで自動で取り込まれる。
+    /// 保管庫のフォルダに書けなければ、この PC のデータフォルダに書く。場所はロック画面で案内する。
+    /// </summary>
+    private void RescueUnsaved(Vault vault)
+    {
+        var name = $"{Path.GetFileNameWithoutExtension(vault.FilePath)} (保存できなかった変更 {DateTime.Now:yyyy-MM-dd HHmmss}){Path.GetExtension(vault.FilePath)}";
+        foreach (var dir in new[] { Path.GetDirectoryName(vault.FilePath)!, Path.Combine(Main.LocalDataDir, "Unsaved") })
+        {
+            var rescue = Path.Combine(dir, name);
+            try
+            {
+                vault.SaveCopyTo(rescue);
+                Main.LockNotice = $"保存できなかった変更を、次のファイルに退避しました（暗号化済み）:\n{rescue}\n同じ保管庫なら、次にアンロックしたときに自動で取り込みます。";
+                return;
+            }
+            catch (VaultException) { }
+        }
+        Main.LockNotice = "保存できなかった変更があり、退避もできませんでした。";
+    }
+
     // ------------------------------------------------------------------ 他の端末との同期（同期フォルダ）
 
     /// <summary>
@@ -276,6 +298,7 @@ public partial class VaultViewModel : ViewModelBase
             if (changed)
             {
                 Refresh();
+                if (SubPage is TrashViewModel trash) trash.Reload(); // ゴミ箱は自前の一覧を持っている
                 Status = "他の端末での変更を取り込みました。";
             }
         }
@@ -543,7 +566,7 @@ public partial class VaultViewModel : ViewModelBase
         _syncTimer.Stop();
         Main.Clipboard.CountdownChanged -= OnClipboardCountdown;
         var path = _vault?.FilePath ?? Main.Settings.VaultPath ?? "";
-        if (_vault is { IsDirty: true }) Persist();
+        if (_vault is { IsDirty: true } && !Persist()) RescueUnsaved(_vault);
         Icons.IconChanged -= OnIconChanged;
         Icons.Dispose(); // 保管庫鍵を捨てる前に、未保存のアイコンを暗号化して保存する
         _vault?.Dispose();
