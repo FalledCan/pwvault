@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PwVault.App.App"
              xmlns:local="using:PwVault.App"
+             xmlns:views="using:PwVault.App.Views"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
              RequestedThemeVariant="Default">
 
     <Application.DataTemplates>
@@ -80,6 +82,32 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="20" />
+        </Style>
+        <!-- 上部の帯（標準のタイトルバーの代わり）。何もない所はドラッグでウィンドウを動かせ、ボタン・入力欄は普通に操作できる -->
+        <Style Selector="Border.titlebar">
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Height" Value="{x:Static views:WindowChrome.TitleBarHeight}" />
+            <Setter Property="Padding" Value="{x:Static views:WindowChrome.TitleBarPadding}" />
+            <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="TitleBar" />
+        </Style>
+        <Style Selector="Border.titlebar Button, Border.titlebar TextBox">
+            <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="User" />
+        </Style>
+        <!-- Avalonia が描くタイトルバーの部品のうち、自前の帯と重なる題名と、使わない全画面ボタンを隠す -->
+        <Style Selector="TopLevelHost Panel#PART_TitleTextPanel TextBlock">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="TopLevelHost Button#PART_FullScreenButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <!-- ステータスバーの小さなボタン -->
+        <Style Selector="Button.statusbar">
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Button.danger">
             <Setter Property="Foreground" Value="{DynamicResource ErrorText}" />

@@ -36,6 +36,7 @@ public partial class MainViewModel : ViewModelBase
     public IFileDialogs FileDialogs { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnlocked))]
     public partial ViewModelBase? CurrentPage { get; set; }
 
     [ObservableProperty]

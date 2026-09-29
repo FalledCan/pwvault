@@ -3,6 +3,7 @@
              xmlns:vm="using:PwVault.App.ViewModels"
              xmlns:core="using:PwVault.Core"
              xmlns:svc="using:PwVault.App.Services"
+             xmlns:local="using:PwVault.App.Views"
              x:Class="PwVault.App.Views.VaultView"
              x:DataType="vm:VaultViewModel">
 
@@ -18,21 +19,18 @@
 
     <Panel>
         <DockPanel>
-            <!-- ツールバー -->
-            <Border DockPanel.Dock="Top" Padding="12,10" Background="{DynamicResource CardBackground}"
-                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
+            <!-- ツールバー（タイトルバーを兼ねる。何もない所をドラッグするとウィンドウが動く） -->
+            <Border DockPanel.Dock="Top" Classes="titlebar">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
-                    <TextBlock Classes="h2" VerticalAlignment="Center" Text="🔐 PwVault" />
-                    <TextBox Grid.Column="1" x:Name="SearchBox" MaxWidth="520" HorizontalAlignment="Stretch"
+                    <local:AppTitle />
+                    <TextBox Grid.Column="1" x:Name="SearchBox" MaxWidth="520" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                              PlaceholderText="{x:Static svc:Shortcuts.SearchPlaceholder}"
                              Text="{Binding SearchText}" IsEnabled="{Binding !HasSubPage}" />
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <Button Classes="accent" Content="＋ 新規" ToolTip.Tip="{x:Static svc:Shortcuts.NewTip}" Command="{Binding NewEntryCommand}" />
                         <Button Content="生成" ToolTip.Tip="{x:Static svc:Shortcuts.GenerateTip}" Command="{Binding ShowGeneratorCommand}" />
                         <Button Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
                         <Button Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
-                        <Button Content="{Binding Main.ThemeToggleText}" ToolTip.Tip="ライト / ダークを切り替える（色は「設定」で選べます）"
-                                Command="{Binding Main.ToggleThemeCommand}" />
                         <Button Content="設定" Command="{Binding ShowSettingsCommand}" />
                         <Button Content="🔒 ロック" ToolTip.Tip="{x:Static svc:Shortcuts.LockTip}" Command="{Binding LockCommand}" />
                     </StackPanel>
@@ -40,12 +38,14 @@
             </Border>
 
             <!-- ステータスバー -->
-            <Border DockPanel.Dock="Bottom" Padding="12,6" Background="{DynamicResource CardBackground}"
+            <Border DockPanel.Dock="Bottom" Padding="12,3" Background="{DynamicResource CardBackground}"
                     BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0">
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
-                    <TextBlock FontSize="12" Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
-                    <TextBlock Grid.Column="1" FontSize="12" Classes="success" Text="{Binding ClipboardStatus}" TextWrapping="NoWrap" />
-                    <TextBlock Grid.Column="2" FontSize="12" Classes="muted" Text="{Binding CountText}" TextWrapping="NoWrap" />
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="16">
+                    <TextBlock FontSize="12" Classes="muted" VerticalAlignment="Center" Text="{Binding Status}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    <TextBlock Grid.Column="1" FontSize="12" Classes="success" VerticalAlignment="Center" Text="{Binding ClipboardStatus}" TextWrapping="NoWrap" />
+                    <TextBlock Grid.Column="2" FontSize="12" Classes="muted" VerticalAlignment="Center" Text="{Binding CountText}" TextWrapping="NoWrap" />
+                    <Button Grid.Column="3" Classes="statusbar" Content="{Binding Main.ThemeToggleText}"
+                            ToolTip.Tip="ライト / ダークを切り替える（色は「設定」で選べます）" Command="{Binding Main.ToggleThemeCommand}" />
                 </Grid>
             </Border>
 

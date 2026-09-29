@@ -97,7 +97,7 @@
                         </ListBox>
                     </Grid>
                     <TextBlock Classes="muted" FontSize="12"
-                               Text="一覧の上の「🌙 ダーク / ☀ ライト」ボタンでも切り替えられます。「OS に合わせる」の色は Windows（Mac）のアクセントカラーです。" />
+                               Text="一覧画面の右下の「🌙 ダーク / ☀ ライト」ボタンでも切り替えられます。「OS に合わせる」の色は Windows（Mac）のアクセントカラーです。" />
                     <StackPanel>
                         <CheckBox IsChecked="{Binding FetchSiteIcons}" Content="サイトのアイコンを各サイトから取得する" />
                         <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"

@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PwVault.App.ViewModels"
+        xmlns:local="using:PwVault.App.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
@@ -10,16 +11,24 @@
         Title="PwVault"
         Width="1100" Height="720" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="{x:Static local:WindowChrome.TitleBarHeight}"
         Background="{DynamicResource PaneBackground}">
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+L" Command="{Binding LockCommand}" />
     </Window.KeyBindings>
 
-    <Panel>
+    <!-- 最大化したとき画面外にはみ出す枠の分だけ内側に寄せる -->
+    <Panel Margin="{Binding $parent[Window].OffScreenMargin}">
         <DockPanel>
+            <!-- アンロック前の画面の上部の帯（アンロック後は一覧画面のツールバーがこれを兼ねる） -->
+            <Border DockPanel.Dock="Top" Classes="titlebar" IsVisible="{Binding !IsUnlocked}">
+                <local:AppTitle HorizontalAlignment="Left" />
+            </Border>
+
             <!-- 更新の通知 -->
-            <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdate}" Padding="12,8"
+            <Border DockPanel.Dock="Bottom" IsVisible="{Binding HasUpdate}" Padding="12,8"
                     Background="{DynamicResource SystemAccentColor}">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
