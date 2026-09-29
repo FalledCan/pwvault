@@ -1,5 +1,8 @@
 using System.Text;
+using Avalonia;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using PwVault.App.Services;
 using PwVault.App.ViewModels;
 using PwVault.Core;
@@ -122,6 +125,44 @@ public class TotpUiTests
         Assert.False(h.Camera.IsOn); // 閉じたらカメラを消す
         Assert.Equal("otpauth://totp/Example:alice?secret=" + SecretText + "&issuer=Example", editor.TotpText);
         Assert.Contains("081 804", editor.TotpPreview);
+    }
+
+
+    /// <summary>カメラの映像は、コマが届くたびに画面が描き直される（最初の 1 コマで止まらない）。</summary>
+    [AvaloniaFact]
+    public async Task CameraPreview_UpdatesOnEveryFrame()
+    {
+        using var h = new Harness();
+        var vm = await Unlock(h, GitHub());
+        vm.SelectedItem = vm.Items.Single();
+        vm.EditEntryCommand.Execute(null);
+        vm.Editor!.ScanTotpQrCommand.Execute(null);
+        var scan = vm.QrScan!;
+        await scan.StartCameraCommand.ExecuteAsync(null);
+
+        foreach (var shade in new byte[] { 230, 20, 230, 20 })
+        {
+            h.Camera.Send(new CameraFrame(Enumerable.Range(0, 320 * 240 * 4).Select(i => i % 4 == 3 ? (byte)255 : shade).ToArray(), 320, 240));
+            await Harness.WaitFor(() => CenterOfPreview(h, scan) is { } v && Math.Abs(v - shade) < 16);
+        }
+    }
+
+    /// <summary>実際に描画した画面で、映像の真ん中の明るさ（映像が無ければ null）。</summary>
+    private static int? CenterOfPreview(Harness h, QrScanViewModel scan)
+    {
+        Harness.Pump();
+        var image = h.Window.GetVisualDescendants().OfType<Avalonia.Controls.Image>().FirstOrDefault(i => i.DataContext == scan && i.IsEffectivelyVisible);
+        if (image is null || image.Bounds.Width < 10) return null;
+        var center = image.TranslatePoint(new Avalonia.Point(image.Bounds.Width / 2, image.Bounds.Height / 2), h.Window)!.Value;
+        using var frame = h.Window.CaptureRenderedFrame()!;
+        var pixel = new byte[4];
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixel, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            frame.CopyPixels(new Avalonia.PixelRect((int)center.X, (int)center.Y, 1, 1), handle.AddrOfPinnedObject(), 4, 4);
+        }
+        finally { handle.Free(); }
+        return pixel[1];
     }
 
     [AvaloniaFact]

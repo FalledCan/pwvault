@@ -93,6 +93,7 @@ public partial class QrScanViewModel : ViewModelBase
         _camera = null;
         IsCameraOn = false;
         Preview = null;
+        Array.Clear(_previewBuffers); // 描画中かもしれないので Dispose はせず、手放すだけ
         if (camera is not null) await camera.DisposeAsync();
     }
 
@@ -122,21 +123,30 @@ public partial class QrScanViewModel : ViewModelBase
         });
     }
 
+    /// <summary>
+    /// 映像用の 2 枚の画像を交互に使う。Image は Source が同じ物のままだと中身を書き換えても描き直さない
+    /// （最初の 1 コマで止まって見えた）ので、毎コマ別の物に替えて描き直させる。表示中の物には書き込まない。
+    /// </summary>
+    private readonly WriteableBitmap?[] _previewBuffers = new WriteableBitmap?[2];
+    private int _previewIndex;
+
     private void ShowPreview(CameraFrame frame)
     {
         if (!IsCameraOn) return;
-        var bitmap = Preview;
+        _previewIndex ^= 1;
+        var bitmap = _previewBuffers[_previewIndex];
         if (bitmap is null || bitmap.PixelSize.Width != frame.Width || bitmap.PixelSize.Height != frame.Height)
-            bitmap = new WriteableBitmap(new PixelSize(frame.Width, frame.Height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        {
+            bitmap?.Dispose(); // 表示中ではない方なので捨ててよい
+            bitmap = _previewBuffers[_previewIndex] =
+                new WriteableBitmap(new PixelSize(frame.Width, frame.Height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        }
         using (var buffer = bitmap.Lock())
         {
             for (var y = 0; y < frame.Height; y++)
                 System.Runtime.InteropServices.Marshal.Copy(frame.Bgra, y * frame.Width * 4, buffer.Address + y * buffer.RowBytes, frame.Width * 4);
         }
-        if (Preview == bitmap)
-            OnPropertyChanged(nameof(Preview)); // 同じ Bitmap でも描き直させる
-        else
-            Preview = bitmap;
+        Preview = bitmap;
     }
 
     [RelayCommand]
