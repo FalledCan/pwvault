@@ -11,10 +11,10 @@ public static class WindowChrome
     public const double TitleBarHeight = 58;
 
     /// <summary>
-    /// OS の「最小化・最大化・閉じる」ボタンの高さ。ボタンはこの高さの中で上下中央に置かれるので、
-    /// 帯（<see cref="TitleBarHeight"/>）より低くして、ウィンドウの上端にぴったり付ける。
+    /// 「最小化・最大化・閉じる」ボタンの高さ。帯（<see cref="TitleBarHeight"/>）より低くし、
+    /// ボタン自体もこの高さいっぱいにして（App.axaml のスタイル）、ウィンドウの上端にぴったり付ける。
     /// </summary>
-    public const double CaptionButtonsHeight = 40;
+    public const double CaptionButtonsHeight = 36;
 
     /// <summary>上部の帯の内側の余白（上はウィンドウの縁との間を少し空ける）。</summary>
     public static Thickness TitleBarPadding { get; } = OperatingSystem.IsMacOS()

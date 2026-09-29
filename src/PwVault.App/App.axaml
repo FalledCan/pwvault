@@ -102,6 +102,11 @@
         <Style Selector="TopLevelHost Button#PART_FullScreenButton">
             <Setter Property="IsVisible" Value="False" />
         </Style>
+        <!-- 最小化・最大化・閉じるは高さ 30 固定で上下中央に置かれ、上にすきまができるので、領域いっぱいにして上端に付ける -->
+        <Style Selector="TopLevelHost StackPanel#PART_OverlayPanel > Button">
+            <Setter Property="Height" Value="{x:Static views:WindowChrome.CaptionButtonsHeight}" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
         <!-- ステータスバーの小さなボタン -->
         <Style Selector="Button.statusbar">
             <Setter Property="Padding" Value="8,1" />
