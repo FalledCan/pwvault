@@ -67,7 +67,7 @@
                     <!-- ゲーム・アプリへの自動入力 -->
                     <StackPanel IsVisible="{Binding AutoTypeSupported}" Spacing="4">
                         <TextBlock Classes="label" Text="自動入力するアプリ（ゲームのランチャーなど。実行ファイル名をカンマ区切り）" />
-                        <TextBox Text="{Binding AutoTypeAppsText}" PlaceholderText="例: ffxivboot.exe" />
+                        <TextBox Text="{Binding AutoTypeAppsText}" PlaceholderText="例: launcher.exe（ログイン画面でショートカットキーを押すと「入力先」に出る名前）" />
                         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                                    Text="ショートカットキーで自動入力するとき、ここに書いたアプリでは確認なしで入力します。入力するときに「紐付けて入力」を選んでも追加されます。&#x0a;複数のアカウントを使う場合は、アカウントごとにエントリを作り、どれにも同じアプリを書いてください（選択窓で番号のキーで選べ、前回使ったアカウントが最初から選ばれます）。" />
                         <CheckBox Content="パスワードだけを入力する（ID は入力しない）" IsChecked="{Binding AutoTypePasswordOnly}" />
