@@ -93,7 +93,7 @@ public sealed class Vault : IDisposable
         byte[] bytes;
         try
         {
-            bytes = File.ReadAllBytes(path);
+            bytes = ReadVaultFile(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -131,7 +131,7 @@ public sealed class Vault : IDisposable
         TimeProvider? clock = null)
     {
         byte[] bytes;
-        try { bytes = File.ReadAllBytes(path); }
+        try { bytes = ReadVaultFile(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new VaultException(VaultErrorKind.Io, "保管庫ファイルを読み込めませんでした。", ex);
@@ -315,7 +315,7 @@ public sealed class Vault : IDisposable
         try
         {
             if (!File.Exists(FilePath)) return false;
-            bytes = File.ReadAllBytes(FilePath);
+            bytes = ReadVaultFile(FilePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -345,20 +345,46 @@ public sealed class Vault : IDisposable
         var merged = new List<string>();
         foreach (var path in FindConflictCopies(FilePath))
         {
+            (string, long, DateTime) stamp;
             try
             {
-                var doc = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
-                if (doc.Header.VaultId != VaultId) continue;
+                var info = new FileInfo(path);
+                stamp = (path, info.Length, info.LastWriteTimeUtc);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            if (_rejectedCopies.Contains(stamp)) continue; // 前に取り込めなかったもの（中身が変わるまで読み直さない）
+
+            try
+            {
+                var doc = VaultFileCodec.Deserialize(ReadVaultFile(path));
+                if (doc.Header.VaultId != VaultId) { _rejectedCopies.Add(stamp); continue; }
                 Merge(doc, adoptHeader: false);
                 merged.Add(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException)
             {
-                // 読めない・壊れているコピーは取り込まずに残す
+                // 読めない・壊れている・改ざんされたコピーは取り込まずに残す
+                _rejectedCopies.Add(stamp);
             }
         }
         if (merged.Count > 0) IsDirty = true;
         return merged;
+    }
+
+    // 取り込めなかった競合コピー（パス・大きさ・更新日時）。数秒ごとの確認で、同じものを何度も読んで復号しないため
+    private readonly HashSet<(string Path, long Length, DateTime Modified)> _rejectedCopies = [];
+
+    /// <summary>保管庫ファイルとして読む大きさの上限。これより大きいものは読まない（巨大なファイルを置かれてメモリを使い切らないため）。</summary>
+    public const long MaxFileBytes = 64L * 1024 * 1024;
+
+    private static byte[] ReadVaultFile(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (stream.Length > MaxFileBytes)
+            throw new VaultException(VaultErrorKind.InvalidFormat, "保管庫ファイルが大きすぎます（保管庫ファイルではない可能性があります）。");
+        var bytes = new byte[stream.Length];
+        stream.ReadExactly(bytes);
+        return bytes;
     }
 
     /// <summary>同期アプリの競合コピーらしいファイル（同じフォルダ・同じ拡張子で、名前が「元の名前 (…)」や「…conflict…」）。</summary>

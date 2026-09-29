@@ -74,7 +74,8 @@ public partial class UnlockViewModel : ViewModelBase
         try
         {
             // 保管庫 ID はヘッダ（平文）から読める。パスワードは不要
-            var vaultId = Core.Format.VaultFileCodec.Deserialize(await File.ReadAllBytesAsync(VaultPath)).Header.VaultId;
+            if (new FileInfo(VaultPath).Length > Vault.MaxFileBytes) return; // 巨大なファイルは読まない（アンロック時に案内する）
+            var vaultId =Core.Format.VaultFileCodec.Deserialize(await File.ReadAllBytesAsync(VaultPath)).Header.VaultId;
             _quickRecord = QuickUnlockService.Load(_main.QuickUnlockPath(vaultId));
             CanQuickUnlock = _quickRecord?.VaultId == vaultId && await provider.IsAvailableAsync();
         }

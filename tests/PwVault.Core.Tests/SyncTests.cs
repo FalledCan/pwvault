@@ -201,6 +201,29 @@ public class SyncTests
     }
 
     [Fact]
+    public void HugeFiles_AreNotRead()
+    {
+        using var dir = new TempDir();
+        var path = dir.File("vault.pwv");
+        using var pc1 = Vault.Create(path, Password, TestKdf.Fast());
+        pc1.AddEntry(Entry("本体"));
+        pc1.Save(3);
+
+        // 同期フォルダに、競合コピーの名前で巨大なファイルを置かれた（中身は空の疎ファイル）
+        var huge = dir.File("vault (1).pwv");
+        using (var fs = new FileStream(huge, FileMode.CreateNew)) fs.SetLength(Vault.MaxFileBytes + 1);
+        Assert.Empty(pc1.MergeConflictCopies());
+        Assert.True(File.Exists(huge)); // 取り込めないものは消さない
+
+        // 本体が巨大なファイルに置き換えられた
+        File.Delete(path);
+        File.Move(huge, path);
+        var ex = Assert.Throws<VaultException>(() => pc1.SyncFromDisk());
+        Assert.Equal(VaultErrorKind.InvalidFormat, ex.Kind);
+        Assert.Equal(VaultErrorKind.InvalidFormat, Assert.Throws<VaultException>(() => Vault.Open(path, Password)).Kind);
+    }
+
+    [Fact]
     public void MoveTo_WritesToNewPlace_MergesSameVault_RefusesOtherVault()
     {
         using var dir = new TempDir();

@@ -42,6 +42,56 @@ public class FaviconFetcherTests
     }
 
     [Fact]
+    public async Task PublicSite_CannotPointIconAtHomeNetworkOrThisPc()
+    {
+        // 公開サイトの HTML が、ルーターや PC 内のサービスを「アイコン」として指す（そこへ GET を送らせる攻撃）
+        var server = Server(
+            ("https://example.com/", "text/html", Html("""
+                <link rel="icon" sizes="64x64" href="http://192.168.1.1/cgi-bin/reboot.png">
+                <link rel="icon" sizes="64x64" href="http://127.0.0.1:8080/admin.png">
+                <link rel="icon" sizes="64x64" href="http://localhost/x.png">
+                <link rel="icon" sizes="64x64" href="http://printer/x.png">
+                <link rel="icon" sizes="64x64" href="http://[::1]/x.png">
+                <link rel="icon" sizes="32x32" href="https://cdn.example.net/icon.png">
+                """)),
+            ("https://cdn.example.net/icon.png", "image/png", Png));
+
+        var data = await new FaviconFetcher(server).FetchAsync(new Uri("https://example.com/"), IsPng, TestContext.Current.CancellationToken);
+        Assert.Equal(Png, data); // 公開の CDN のアイコンは使える
+        Assert.All(server.Requests, u => Assert.False(FaviconFetcher.IsInternalHost(u.Host), u.ToString()));
+    }
+
+    [Fact]
+    public async Task SavedHomeNetworkSite_CanStillFetchItsOwnIcon()
+    {
+        // ルーターの管理画面などを自分で保存している場合は、そのサイトのアイコンを取れる
+        var server = Server(
+            ("http://192.168.1.1/", "text/html", Html("""<link rel="icon" href="/logo.png">""")),
+            ("http://192.168.1.1/logo.png", "image/png", Png));
+        Assert.Equal(Png, await new FaviconFetcher(server).FetchAsync(new Uri("http://192.168.1.1/login"), IsPng, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("10.1.2.3", false)]
+    [InlineData("172.16.0.1", false)]
+    [InlineData("172.31.255.255", false)]
+    [InlineData("192.168.0.10", false)]
+    [InlineData("169.254.169.254", false)]
+    [InlineData("100.64.0.1", false)]
+    [InlineData("0.0.0.0", false)]
+    [InlineData("224.0.0.1", false)]
+    [InlineData("::1", false)]
+    [InlineData("fe80::1", false)]
+    [InlineData("fd00::1", false)]
+    [InlineData("::ffff:192.168.1.1", false)]
+    [InlineData("8.8.8.8", true)]
+    [InlineData("172.32.0.1", true)]
+    [InlineData("2606:4700:4700::1111", true)]
+    public void IsPublicAddress_RejectsInternalRanges(string ip, bool expected) =>
+        Assert.Equal(expected, FaviconFetcher.IsPublicAddress(System.Net.IPAddress.Parse(ip)));
+
+    [Fact]
     public async Task FallsBackToFaviconIco()
     {
         var server = Server(
