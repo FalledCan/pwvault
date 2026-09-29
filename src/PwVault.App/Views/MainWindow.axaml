@@ -12,7 +12,7 @@
         Width="1100" Height="720" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="{x:Static local:WindowChrome.TitleBarHeight}"
+        ExtendClientAreaTitleBarHeightHint="{x:Static local:WindowChrome.CaptionButtonsHeight}"
         Background="{DynamicResource PaneBackground}">
 
     <Window.KeyBindings>
