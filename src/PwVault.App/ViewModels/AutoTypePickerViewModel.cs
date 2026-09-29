@@ -8,9 +8,13 @@ using PwVault.Core.Tools;
 namespace PwVault.App.ViewModels;
 
 /// <summary>自動タイプの選択窓の 1 行。</summary>
-public sealed record AutoTypeItem(VaultEntry Entry, bool IsLinked)
+public sealed record AutoTypeItem(VaultEntry Entry, bool IsLinked, int? Number = null)
 {
     public Guid Id => Entry.Id;
+
+    /// <summary>このアプリ用のアカウントに付ける番号（1〜9。数字キーで選べる）。</summary>
+    public bool HasNumber => Number is not null;
+    public string NumberText => Number?.ToString() ?? "";
     public string Title => Entry.Data.Title.Length > 0 ? Entry.Data.Title : "（無題）";
     public string Subtitle => Entry.Data.Username.Length > 0 ? Entry.Data.Username : Entry.Data.Url;
 }
@@ -73,10 +77,33 @@ public partial class AutoTypePickerViewModel : ViewModelBase
             .Select(e => new AutoTypeItem(e, AutoTypeMatcher.IsLinked(e.Data, Target.ProcessName)))
             .OrderByDescending(i => i.IsLinked)
             .ToList();
+        // このアプリ用のアカウント（複数アカウントなど）に 1〜9 の番号を付ける
+        var number = 0;
+        found = found.Select(i => i.IsLinked && number < 9 ? i with { Number = ++number } : i).ToList();
+
         Items.Clear();
         foreach (var item in found) Items.Add(item);
-        SelectedItem = Items.FirstOrDefault();
+        // 前回このアプリに入力したアカウントを選んでおく（無ければ先頭）
+        var last = _main.LastAutoTypeEntry(Target.ProcessName);
+        SelectedItem = Items.FirstOrDefault(i => i.IsLinked && i.Id == last) ?? Items.FirstOrDefault();
         OnPropertyChanged(nameof(HasLinked));
+        OnPropertyChanged(nameof(LinkedCount));
+    }
+
+    /// <summary>2 つ以上なら true（番号で選べることの案内を出す）。</summary>
+    public static readonly Avalonia.Data.Converters.IValueConverter MoreThanOne =
+        new Avalonia.Data.Converters.FuncValueConverter<int, bool>(n => n > 1);
+
+    /// <summary>このアプリ用のアカウントの数（2 つ以上なら、番号で選べることを案内する）。</summary>
+    public int LinkedCount => Items.Count(i => i.IsLinked);
+
+    /// <summary>数字キー（検索欄が空のとき）で、その番号のアカウントを入力する。番号が無ければ false。</summary>
+    public bool ChooseNumber(int number)
+    {
+        if (SearchText.Length > 0 || Items.FirstOrDefault(i => i.Number == number) is not { } item) return false;
+        SelectedItem = item;
+        ChooseCommand.Execute(item);
+        return true;
     }
 
     /// <summary>選んだエントリを入力する（Enter・ダブルクリック・「入力」）。紐付けていなければ確認を出す。</summary>
@@ -140,6 +167,7 @@ public partial class AutoTypePickerViewModel : ViewModelBase
         }
 
         _vault.Status = $"「{entry.Data.Title}」を {target.ProcessName} に入力しました。";
+        _main.RememberAutoTypeEntry(target.ProcessName, id);
         _main.CloseAutoTypePicker();
     }
 

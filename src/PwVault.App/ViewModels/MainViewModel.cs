@@ -138,6 +138,17 @@ public partial class MainViewModel : ViewModelBase
 
     public void CloseAutoTypePicker() => AutoTypePicker = null;
 
+    // アプリごとの「前回入力したアカウント」。PwVault を起動している間だけ覚える（設定ファイルには書かない）。
+    // ロック後もメモリにアプリ名が残らないよう、キーはアプリ名のハッシュにする
+    private readonly Dictionary<string, Guid> _lastAutoType = [];
+
+    private static string AppKey(string app) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Core.Tools.AutoTypeMatcher.Normalize(app))));
+
+    public void RememberAutoTypeEntry(string app, Guid entryId) => _lastAutoType[AppKey(app)] = entryId;
+
+    public Guid? LastAutoTypeEntry(string app) => _lastAutoType.TryGetValue(AppKey(app), out var id) ? id : null;
+
     // ---- 紐付けたアプリが前に出たときの自動入力
 
     private IDisposable? _foregroundWatch;

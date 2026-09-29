@@ -132,6 +132,62 @@ public class AutoTypeTests
     }
 
     [AvaloniaFact]
+    public async Task MultipleAccounts_NumberedChooseByDigit_AndRemembersLastUsed()
+    {
+        using var h = new Harness();
+        EntryData Account(string user) => new() { Title = "FF14 " + user, Username = user, Password = user + "-pw", AutoTypeApps = ["ffxivboot.exe"] };
+        await Unlock(h, Bank(), Account("main"), Account("alt"));
+        Enable(h);
+
+        var picker = PressHotKeyOn(h, Game);
+        Assert.Equal(2, picker.LinkedCount);
+        Assert.Equal([("FF14 alt", "1"), ("FF14 main", "2")], picker.Items.Where(i => i.HasNumber).Select(i => (i.Title, i.NumberText)));
+        Assert.False(picker.Items.Single(i => i.Title == "銀行").HasNumber);
+        Assert.Equal("FF14 alt", picker.SelectedItem!.Title);
+
+        // 番号キーの画面での動き（検索欄に数字として入れず、その番号のアカウントで入力する）
+        var window = new Views.AutoTypePickerWindow { DataContext = picker };
+        window.Show();
+        Harness.Pump();
+        SaveWindow(window, "37-autotype-multiple-accounts");
+        var search = Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.TextBox>(window, "SearchBox")!;
+        search.RaiseEvent(new Avalonia.Input.TextInputEventArgs { RoutedEvent = Avalonia.Input.InputElement.TextInputEvent, Text = "2" });
+        await Harness.WaitFor(() => h.Main.AutoTypePicker is null);
+        Assert.Equal(["main", "<TAB>", "main-pw"], h.AutoType.Typed);
+        Assert.Equal("", picker.SearchText);
+        window.ClosingFromViewModel = true;
+        window.Close();
+
+        // 次は前回使った「main」が最初から選ばれている
+        var next = PressHotKeyOn(h, Game);
+        Assert.Equal("FF14 main", next.SelectedItem!.Title);
+
+        // 検索中は数字を検索の文字として扱う（番号では選ばない）
+        next.SearchText = "FF";
+        Assert.False(next.ChooseNumber(1));
+        next.CancelCommand.Execute(null);
+
+        // アプリが開いたときの候補でも、前回のアカウントが選ばれる（複数あるので自動では打たない）
+        h.AutoType.Typed.Clear();
+        h.AutoType.BringToFront(Game with { Handle = new IntPtr(0x5555) });
+        Harness.Pump();
+        var auto = h.Main.AutoTypePicker!;
+        Assert.True(auto.OpenedAutomatically);
+        Assert.Equal("FF14 main", auto.SelectedItem!.Title);
+        Assert.Empty(h.AutoType.Typed);
+    }
+
+    private static void SaveWindow(Avalonia.Controls.Window w, string name)
+    {
+        var dir = Environment.GetEnvironmentVariable("PWVAULT_SCREENSHOT_DIR") ?? Path.Combine(AppContext.BaseDirectory, "screenshots");
+        Directory.CreateDirectory(dir);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+#pragma warning disable CS0618
+        w.CaptureRenderedFrame()?.Save(Path.Combine(dir, name + ".png"));
+#pragma warning restore CS0618
+    }
+
+    [AvaloniaFact]
     public async Task UnlinkedEntry_AsksFirst_AndCanLinkIt()
     {
         using var h = new Harness();

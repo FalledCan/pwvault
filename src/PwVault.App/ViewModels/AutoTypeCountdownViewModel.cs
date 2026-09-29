@@ -61,6 +61,7 @@ public partial class AutoTypeCountdownViewModel : ViewModelBase
             return;
         }
         var error = await AutoTyper.TypeAsync(_platform, Target, entry.Data, TimeSpan.Zero, activate: false);
+        if (error is null) _main.RememberAutoTypeEntry(Target.ProcessName, EntryId);
         Stop(error ?? $"「{entry.Data.Title}」を {Target.ProcessName} に入力しました。");
     }
 

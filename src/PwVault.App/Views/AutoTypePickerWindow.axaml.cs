@@ -9,7 +9,17 @@ namespace PwVault.App.Views;
 /// <summary>自動タイプの選択窓。打ち込み中は隠し、失敗したら出し直す。閉じるのは ViewModel（MainViewModel.AutoTypePicker = null）から。</summary>
 public partial class AutoTypePickerWindow : Window
 {
-    public AutoTypePickerWindow() => InitializeComponent();
+    public AutoTypePickerWindow()
+    {
+        InitializeComponent();
+        // 検索欄が空のとき、数字キー（1〜9）でその番号のアカウントを入力する（検索の文字としては入れない）
+        var search = this.FindControl<TextBox>("SearchBox")!;
+        search.AddHandler(TextInputEvent, (_, e) =>
+        {
+            if (DataContext is AutoTypePickerViewModel vm && e.Text is [>= '1' and <= '9'] digit && vm.ChooseNumber(digit[0] - '0'))
+                e.Handled = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+    }
 
     /// <summary>ViewModel 側で閉じたとき（×で閉じたのでなければ）の区別。</summary>
     public bool ClosingFromViewModel { get; set; }

@@ -22,6 +22,9 @@
                 <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding TargetText, StringFormat='入力先: {0}'}" />
                 <TextBlock Classes="success" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding OpenedAutomatically}"
                            Text="紐付けたアプリが開いたので候補を出しました。ID 欄にカーソルがあることを確かめて Enter で入力します。" />
+                <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                           IsVisible="{Binding LinkedCount, Converter={x:Static vm:AutoTypePickerViewModel.MoreThanOne}}"
+                           Text="このアプリ用のアカウントが複数あります。番号のキー（1〜9）を押すと、そのアカウントですぐに入力します。" />
                 <TextBox x:Name="SearchBox" PlaceholderText="エントリを検索" Text="{Binding SearchText}">
                     <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding ChooseCommand}" />
@@ -52,12 +55,19 @@
                              Background="Transparent" DoubleTapped="OnDoubleTapped">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:AutoTypeItem">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <StackPanel>
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                    <!-- 数字キーで選べる番号（このアプリ用のアカウントだけ） -->
+                                    <Border Width="22" Height="22" CornerRadius="11" VerticalAlignment="Center"
+                                            BorderBrush="{DynamicResource SystemAccentColor}" BorderThickness="1.5"
+                                            IsVisible="{Binding HasNumber}">
+                                        <TextBlock Text="{Binding NumberText}" FontWeight="SemiBold" FontSize="12"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Classes="muted" FontSize="12" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <Border Grid.Column="1" IsVisible="{Binding IsLinked}" Background="{DynamicResource SystemAccentColor}"
+                                    <Border Grid.Column="2" IsVisible="{Binding IsLinked}" Background="{DynamicResource SystemAccentColor}"
                                             CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                         <TextBlock Text="このアプリ用" FontSize="11" Foreground="White" />
                                     </Border>
