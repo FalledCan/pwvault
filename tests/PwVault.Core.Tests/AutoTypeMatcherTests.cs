@@ -32,6 +32,15 @@ public class AutoTypeMatcherTests
         Assert.Empty(AutoTypeMatcher.Linked([linked], ""));
     }
 
+    [Theory]
+    [InlineData("FFXIV Boot Ver. 2026.08.18.0000.0001", "FFXIV Boot")]
+    [InlineData("FINAL FANTASY XIV アップデート 45%", "FINAL FANTASY XIV アップデート")]
+    [InlineData("Launcher v1.2.3", "Launcher")]
+    [InlineData("更新を確認しています (3/10)", "更新を確認しています")]
+    [InlineData("12345", "12345")] // 数字しか無ければそのまま
+    public void StableTitlePart_DropsVersionsAndProgress(string title, string expected) =>
+        Assert.Equal(expected, AutoTypeMatcher.StableTitlePart(title));
+
     [Fact]
     public void IgnoredWindow_MatchesTitleContainingText()
     {

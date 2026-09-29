@@ -464,11 +464,12 @@ public partial class VaultViewModel : ViewModelBase
     public void IgnoreAutoTypeWindow(string app, string title)
     {
         if (title.Trim().Length == 0) return;
+        var stable = Core.Tools.AutoTypeMatcher.StableTitlePart(title); // 版番号などは覚えない（更新で変わっても効くように）
         foreach (var entry in Core.Tools.AutoTypeMatcher.Linked(Vault.GetEntries(), app))
         {
             if (entry.Data.AutoTypeOnOpen == AutoTypeOnOpen.None || Core.Tools.AutoTypeMatcher.IsIgnoredWindow(entry.Data, title)) continue;
             var data = entry.Data.Clone();
-            data.AutoTypeIgnoreTitles.Add(title.Trim());
+            data.AutoTypeIgnoreTitles.Add(stable);
             Vault.UpdateEntry(entry.Id, data);
         }
         Persist();

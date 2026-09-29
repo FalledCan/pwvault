@@ -75,7 +75,7 @@ public partial class AutoTypeCountdownViewModel : ViewModelBase
     private void IgnoreThisWindow()
     {
         _vault.IgnoreAutoTypeWindow(Target.ProcessName, Target.Title);
-        Stop($"「{Target.Title}」の画面では、次から自動入力しません（エントリの編集画面で戻せます）。");
+        Stop($"「{Core.Tools.AutoTypeMatcher.StableTitlePart(Target.Title)}」の画面では、次から自動入力しません（エントリの編集画面で戻せます）。");
     }
 
     private void Stop(string? status)

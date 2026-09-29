@@ -151,7 +151,7 @@ public partial class AutoTypePickerViewModel : ViewModelBase
     private void IgnoreThisWindow()
     {
         _vault.IgnoreAutoTypeWindow(Target.ProcessName, Target.Title);
-        _vault.Status = $"「{Target.Title}」の画面では、次から候補を出しません（エントリの編集画面で戻せます）。";
+        _vault.Status = $"「{AutoTypeMatcher.StableTitlePart(Target.Title)}」の画面では、次から候補を出しません（エントリの編集画面で戻せます）。";
         _main.CloseAutoTypePicker();
     }
 

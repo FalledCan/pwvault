@@ -39,6 +39,18 @@ public static class AutoTypeMatcher
     public static IReadOnlyList<VaultEntry> Linked(IEnumerable<VaultEntry> entries, string app) =>
         entries.Where(e => !e.Data.IsTrashed && IsLinked(e.Data, app)).ToList();
 
+    /// <summary>
+    /// 「この画面では出さない」で覚える部分。版番号や進み具合など、次に開いたときに変わりそうな数字を除く
+    /// （例: 「FFXIV Boot Ver. 2026.08.18.0000.0001」→「FFXIV Boot」、「アップデート中 45%」→「アップデート中」）。
+    /// 除くと何も残らないときは、題名をそのまま使う。
+    /// </summary>
+    public static string StableTitlePart(string title)
+    {
+        var stable = System.Text.RegularExpressions.Regex.Replace(title, @"(?i)\b(ver(sion)?\.?|v)?\s*\d[\d.,:%/()\-]*", " ");
+        stable = System.Text.RegularExpressions.Regex.Replace(stable, @"\s+", " ").Trim(' ', '-', '(', ')', '[', ']', ':');
+        return stable.Length > 0 ? stable : title.Trim();
+    }
+
     /// <summary>アプリが開いたときの自動入力で、この題名の画面には反応しないか（題名に登録した文字を含む）。</summary>
     public static bool IsIgnoredWindow(EntryData data, string title) =>
         data.AutoTypeIgnoreTitles.Any(t => t.Trim().Length > 0 && title.Contains(t.Trim(), StringComparison.OrdinalIgnoreCase));
