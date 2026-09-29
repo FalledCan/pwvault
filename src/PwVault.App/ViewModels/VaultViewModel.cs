@@ -557,6 +557,9 @@ public partial class VaultViewModel : ViewModelBase
     [RelayCommand]
     private void ShowSettings() => OpenSubPage(new SettingsViewModel(this));
 
+    /// <summary>設定を、指定のカテゴリーを選んだ状態で開く（チュートリアルの「この設定を開く」から）。</summary>
+    public void ShowSettingsAt(SettingsCategory category) => OpenSubPage(new SettingsViewModel(this, category));
+
     [RelayCommand]
     private void ShowImportExport() => OpenSubPage(new ImportExportViewModel(this));
 

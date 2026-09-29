@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Windows Hello でのアンロックを、マスターパスワードなしで続けられる日数。過ぎたらマスターパスワードが必要。</summary>
     public int QuickUnlockDays { get; set; } = 14;
 
+    /// <summary>チュートリアルを一度見た（または閉じた）か。保管庫を作った直後に自動で出すのは、まだのときだけ。</summary>
+    public bool TutorialSeen { get; set; }
+
     /// <summary>画面の明るさ（OS に合わせる / ライト / ダーク）。</summary>
     public ThemeMode Theme { get; set; } = ThemeMode.System;
 

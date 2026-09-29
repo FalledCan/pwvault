@@ -6,6 +6,11 @@ using PwVault.Core.Tools;
 
 namespace PwVault.App.ViewModels;
 
+/// <summary>設定のカテゴリー（左の一覧）。</summary>
+public enum SettingsCategory { General, Display, Security, Storage, Browser, Update, Help }
+
+public sealed record SettingsCategoryItem(SettingsCategory Category, string Icon, string Label);
+
 /// <summary>S7 設定（FR-10, FR-13）。自動ロック・クリップボード・バックアップ世代・KDF・マスターパスワード変更。</summary>
 public partial class SettingsViewModel : ViewModelBase
 {
@@ -14,9 +19,43 @@ public partial class SettingsViewModel : ViewModelBase
 
     private readonly VaultViewModel _owner;
 
-    public SettingsViewModel(VaultViewModel owner)
+    public IReadOnlyList<SettingsCategoryItem> Categories { get; } =
+    [
+        new(SettingsCategory.General, "⚙", "一般"),
+        new(SettingsCategory.Display, "🎨", "表示"),
+        new(SettingsCategory.Security, "🔑", "セキュリティ"),
+        new(SettingsCategory.Storage, "☁", "保存先と同期"),
+        new(SettingsCategory.Browser, "🌐", "ブラウザ連携"),
+        new(SettingsCategory.Update, "⬆", "更新"),
+        new(SettingsCategory.Help, "❓", "使い方"),
+    ];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGeneral), nameof(IsDisplay), nameof(IsSecurity), nameof(IsStorage),
+        nameof(IsBrowser), nameof(IsUpdate), nameof(IsHelp))]
+    public partial SettingsCategoryItem? SelectedCategory { get; set; }
+
+    private bool Is(SettingsCategory c) => SelectedCategory?.Category == c;
+    public bool IsGeneral => Is(SettingsCategory.General);
+    public bool IsDisplay => Is(SettingsCategory.Display);
+    public bool IsSecurity => Is(SettingsCategory.Security);
+    public bool IsStorage => Is(SettingsCategory.Storage);
+    public bool IsBrowser => Is(SettingsCategory.Browser);
+    public bool IsUpdate => Is(SettingsCategory.Update);
+    public bool IsHelp => Is(SettingsCategory.Help);
+
+    /// <summary>カテゴリーを切り替える（チュートリアルの「この設定を開く」などから）。</summary>
+    public void ShowCategory(SettingsCategory category) => SelectedCategory = Categories.First(c => c.Category == category);
+
+    public const string ProjectPage = "https://github.com/FalledCan/pwvault#readme";
+
+    [RelayCommand]
+    private void OpenProjectPage() => _owner.Main.OpenInBrowser(new Uri(ProjectPage));
+
+    public SettingsViewModel(VaultViewModel owner, SettingsCategory category = SettingsCategory.General)
     {
         _owner = owner;
+        ShowCategory(category);
         var s = owner.Main.Settings;
         AutoLockMinutes = s.AutoLockMinutes;
         ClipboardSeconds = s.ClipboardClearSeconds;

@@ -116,6 +116,7 @@ public class BridgeTests
         var settings = Assert.IsType<SettingsViewModel>(vm.SubPage);
         Assert.True(settings.BrowserEnabled);
         h.Window.Height = 1250; // 設定画面の「ブラウザ連携」欄まで写す
+        settings.ShowCategory(SettingsCategory.Browser);
         h.Screenshot("13-browser-settings");
         h.Window.Height = 720;
         vm.CloseSubPageCommand.Execute(null);

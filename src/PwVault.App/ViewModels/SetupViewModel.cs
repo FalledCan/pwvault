@@ -27,6 +27,8 @@ public partial class SetupViewModel : ViewModelBase
 
     public bool HasCloudVaults => CloudVaults.Count > 0;
 
+    public MainViewModel Main => _main;
+
     [RelayCommand]
     private void OpenCloudVault(CloudVault? vault)
     {
@@ -125,6 +127,8 @@ public partial class SetupViewModel : ViewModelBase
             });
             Password = ConfirmPassword = "";
             _main.OnUnlocked(vault);
+            // はじめての保管庫なら、使い方の案内を出す（最初のページで「スキップ」もできる）
+            if (!_main.Settings.TutorialSeen) _main.StartTutorial();
         }
         catch (VaultException ex)
         {

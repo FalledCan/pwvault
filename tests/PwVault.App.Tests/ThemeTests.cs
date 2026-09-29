@@ -75,6 +75,7 @@ public class ThemeTests
         settings.SelectedTheme = settings.ThemeModes.Single(m => m.Mode == ThemeMode.Dark);
         Assert.Equal(ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         h.Window.Height = 1100;
+        settings.ShowCategory(SettingsCategory.Display);
         h.Screenshot("24-settings-theme-green-dark");
         h.Window.Height = 720;
 

@@ -72,6 +72,7 @@ public class StorageSyncTests
         Assert.True(settings.CanMoveToGoogleDrive);
         Assert.False(settings.CanMoveToNextcloud); // Nextcloud は入っていない
         h.Window.Height = 1000;
+        settings.ShowCategory(SettingsCategory.Storage);
         h.Screenshot("20-storage-settings");
 
         var move = settings.MoveToGoogleDriveCommand.ExecuteAsync(null);

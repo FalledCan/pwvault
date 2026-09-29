@@ -11,6 +11,13 @@
                     <TextBlock Classes="muted" Text="パスワードは暗号化してこの PC 上の 1 つのファイルに保存します。通信は一切行いません。" />
                 </StackPanel>
 
+                <!-- はじめての人向け -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Classes="muted" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="はじめて使う方は、先に使い方をご覧ください（約 2 分）。" />
+                    <Button Grid.Column="1" Content="▶ 使い方を見る" Command="{Binding Main.StartTutorialCommand}" />
+                </Grid>
+
                 <!-- 2 台目の PC: 同期フォルダに既にある保管庫を開く -->
                 <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="14" IsVisible="{Binding HasCloudVaults}">
                     <StackPanel Spacing="8">

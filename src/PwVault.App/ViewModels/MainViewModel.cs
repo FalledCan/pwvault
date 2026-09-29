@@ -79,6 +79,25 @@ public partial class MainViewModel : ViewModelBase
         RepairAutoStart();
     }
 
+    // ------------------------------------------------------------------ チュートリアル
+
+    /// <summary>表示中のチュートリアル（無ければ null）。画面の上に重ねて出す。</summary>
+    [ObservableProperty]
+    public partial TutorialViewModel? Tutorial { get; set; }
+
+    [RelayCommand]
+    public void StartTutorial() => Tutorial = new TutorialViewModel(this);
+
+    public void CloseTutorial()
+    {
+        Tutorial = null;
+        if (!Settings.TutorialSeen)
+        {
+            Settings.TutorialSeen = true;
+            SaveSettings();
+        }
+    }
+
     // ------------------------------------------------------------------ テーマ
 
     /// <summary>ツールバーの切り替えボタンの表示（押したらなる方）。</summary>
@@ -471,6 +490,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (CurrentPage is VaultViewModel vault)
         {
+            Tutorial = null; // 「この設定を開く」などは保管庫を開いている前提なので閉じる
             var path = vault.Close();
             CurrentPage = new UnlockViewModel(this, path);
         }
