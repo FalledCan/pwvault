@@ -71,7 +71,8 @@ public static class AutoTypeMatcher
             actions.Add(new AutoTypeAction.Text(data.Password));
         if (data.AutoTypeTotp && Otp.TotpKey.FromStored(data.Totp) is { } totp)
         {
-            if (actions.Count > 0) actions.Add(new AutoTypeAction.Tab());
+            // パスワードが空で ID の後の Tab で終わっているときは、もう Tab を押さない（欄を 1 つ飛ばしてしまう）
+            if (actions.Count > 0 && actions[^1] is not AutoTypeAction.Tab) actions.Add(new AutoTypeAction.Tab());
             actions.Add(new AutoTypeAction.Text(totp.Generate(now ?? DateTimeOffset.UtcNow)));
         }
         return actions;

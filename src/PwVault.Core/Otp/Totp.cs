@@ -76,7 +76,12 @@ public sealed class TotpKey
     /// <summary>保存用の形（otpauth://totp/発行元:アカウント?secret=...&amp;issuer=...）。既定値の項目は省く。</summary>
     public string ToUri()
     {
-        var label = Issuer.Length > 0 ? Uri.EscapeDataString(Issuer) + ":" + Uri.EscapeDataString(Account) : Uri.EscapeDataString(Account);
+        // ラベルは「発行元:アカウント」。読むときは最初の「:」で分けるので、発行元に「:」があればラベルには入れず
+        // （issuer= から読む）、発行元が無くてもアカウントに「:」があれば先頭に「:」を付けて、読み直しで名前がずれないようにする
+        var labelIssuer = Issuer.Contains(':') ? "" : Issuer;
+        var label = labelIssuer.Length > 0 || Account.Contains(':') || Issuer.Length > 0
+            ? Uri.EscapeDataString(labelIssuer) + ":" + Uri.EscapeDataString(Account)
+            : Uri.EscapeDataString(Account);
         var query = new StringBuilder("?secret=").Append(Base32.Encode(Secret));
         if (Issuer.Length > 0) query.Append("&issuer=").Append(Uri.EscapeDataString(Issuer));
         if (Algorithm != OtpAlgorithm.Sha1) query.Append("&algorithm=").Append(Algorithm.ToString().ToUpperInvariant());

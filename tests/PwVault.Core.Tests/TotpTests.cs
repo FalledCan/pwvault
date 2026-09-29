@@ -202,6 +202,46 @@ public class TotpTests
         Assert.NotNull(error);
     }
 
+    [Theory]
+    [InlineData("", "a:b")]         // 発行元が無く、アカウントに「:」
+    [InlineData("Corp:Tokyo", "alice")] // 発行元に「:」
+    [InlineData("Corp:Tokyo", "a:b")]
+    [InlineData("", "")]
+    [InlineData("Example", "")]
+    public void ToUri_RoundTripsNames_EvenWithColons(string issuer, string account)
+    {
+        var key = new TotpKey(SecretA, issuer: issuer, account: account);
+        var again = TotpKey.FromStored(key.ToUri())!;
+        Assert.True(again.SameSecret(key));
+        Assert.Equal(issuer, again.Issuer);
+        Assert.Equal(account, again.Account);
+    }
+
+    /// <summary>敵対検証: でたらめな移行用データ・otpauth を大量に与えても、例外で落ちず、読めたものは保存形で往復できる。</summary>
+    [Fact]
+    public void Fuzz_RandomInput_NeverThrows()
+    {
+        var rng = new Random(20260930);
+        for (var i = 0; i < 20000; i++)
+        {
+            var bytes = new byte[rng.Next(0, 160)];
+            rng.NextBytes(bytes);
+            if (i % 2 == 0 && bytes.Length > 3) { bytes[0] = 0x0a; bytes[1] = (byte)(bytes.Length - 2); bytes[2] = 0x0a; bytes[3] = 5; }
+            GoogleAuthMigration.TryParse("otpauth-migration://offline?data=" + Uri.EscapeDataString(Convert.ToBase64String(bytes)), out _, out _);
+        }
+
+        string[] parts = ["otpauth://totp/", "otpauth://hotp/", "otpauth:totp", "?", "&", "=", "%", "%zz", ":", "secret=", "JBSWY3DPEHPK3PXP",
+            "digits=", "period=", "algorithm=", "issuer=", "#", "@", "/", "\\", "\0", "é", "😀", " ", "+", "-", "99999999999999", "0", "８"];
+        for (var i = 0; i < 20000; i++)
+        {
+            var text = string.Concat(Enumerable.Range(0, rng.Next(1, 9)).Select(_ => parts[rng.Next(parts.Length)]));
+            if (!TotpKey.TryParse(text, out var key, out _)) continue;
+            key!.Generate(DateTimeOffset.UtcNow);
+            var again = TotpKey.FromStored(key.ToUri());
+            Assert.True(again is not null && again.SameSecret(key) && again.Issuer == key.Issuer && again.Account == key.Account, text);
+        }
+    }
+
     [Fact]
     public void Migration_AcceptsUnescapedBase64()
     {
@@ -275,6 +315,10 @@ public class TotpTests
         // コードだけ（ID・パスワードが無い）なら Tab は付けない
         Assert.Equal([new AutoTypeAction.Text("081804")],
             AutoTypeMatcher.Sequence(new EntryData { Totp = SampleUri, AutoTypeTotp = true }, now));
+
+        // ID はあるがパスワードが空: ID の後の Tab だけで番号の欄に進む（Tab を 2 回押して欄を飛ばさない）
+        Assert.Equal([new AutoTypeAction.Text("alice"), new AutoTypeAction.Tab(), new AutoTypeAction.Text("081804")],
+            AutoTypeMatcher.Sequence(new EntryData { Username = "alice", Totp = SampleUri, AutoTypeTotp = true }, now));
     }
 
     [Fact]

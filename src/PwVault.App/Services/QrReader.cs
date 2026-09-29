@@ -13,6 +13,9 @@ public static class QrReader
     /// <summary>これより大きい画像は縮めてから読む（読み取りの時間とメモリを抑える）。</summary>
     private const int MaxSide = 2400;
 
+    /// <summary>展開する画素数の上限（約 5000 万画素 = 200 MB。スマホの写真はこれに収まる）。</summary>
+    public const long MaxDecodePixels = 50_000_000;
+
     private static readonly DecodingOptions Options = new()
     {
         PossibleFormats = [BarcodeFormat.QR_CODE],
@@ -40,7 +43,21 @@ public static class QrReader
                 error = "画像が大きすぎます。";
                 return null;
             }
-            using var original = SKBitmap.Decode(path);
+            // 先に縦横の大きさだけ見る。ファイルが小さくても、展開すると巨大になる画像（細工した PNG など）で
+            // メモリを使い果たさないように、展開後の画素数に上限を設ける（JPEG は読み込み時に縮められる）
+            using var codec = SKCodec.Create(path);
+            if (codec is null)
+            {
+                error = "画像として読めませんでした（PNG・JPEG のスクリーンショットを選んでください）。";
+                return null;
+            }
+            var size = codec.GetScaledDimensions(Math.Min(1f, (float)MaxSide / Math.Max(1, Math.Max(codec.Info.Width, codec.Info.Height))));
+            if (size.Width <= 0 || size.Height <= 0 || (long)size.Width * size.Height > MaxDecodePixels)
+            {
+                error = "画像が大きすぎます（縦横の画素数が多すぎます）。";
+                return null;
+            }
+            using var original = SKBitmap.Decode(codec, new SKImageInfo(size.Width, size.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
             if (original is null)
             {
                 error = "画像として読めませんでした（PNG・JPEG のスクリーンショットを選んでください）。";
