@@ -404,6 +404,62 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>ロック時に伝えたいこと（保存できなかった変更の退避先など）。次のアンロック画面が表示して消す。</summary>
     public string? LockNotice { get; set; }
 
+    /// <summary>ロック画面で伝えることを足す（複数あれば改行でつなぐ）。</summary>
+    public void AddLockNotice(string message) => LockNotice = LockNotice is null ? message : LockNotice + "\n\n" + message;
+
+    // ------------------------------------------------------------------ 想定外のエラー
+
+    private bool _handlingUnexpected;
+
+    /// <summary>
+    /// 想定外の例外（UI の処理で捕まえていないもの）の受け皿。アプリを落とさず、変更を保存（できなければ退避）してロックする。
+    /// 調査用に、例外の種類と呼び出し位置だけを記録する（メッセージは機密を含みうるので書かない）。
+    /// 受け皿の中でさらに失敗したら false（呼び出し側はそのまま落とす）。
+    /// </summary>
+    public bool HandleUnexpectedError(Exception ex)
+    {
+        if (_handlingUnexpected) return false;
+        _handlingUnexpected = true;
+        try
+        {
+            WriteErrorLog(ex);
+            if (IsUnlocked)
+            {
+                AddLockNotice("問題が起きたため、安全のためロックしました（変更は保存または退避しています）。");
+                Lock();
+            }
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        finally
+        {
+            _handlingUnexpected = false;
+        }
+    }
+
+    /// <summary>エラーの記録の場所（この PC だけ）。</summary>
+    public string ErrorLogPath => Path.Combine(LocalDataDir, "Logs", "errors.log");
+
+    /// <summary>エラーを記録だけする（ロックはしない。バックグラウンドの処理の失敗など）。</summary>
+    public void WriteErrorLog(Exception ex)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ErrorLogPath)!);
+            var text = new System.Text.StringBuilder()
+                .AppendLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] v{CurrentVersion}");
+            for (var e = ex; e is not null; e = e.InnerException)
+                text.AppendLine(e.GetType().FullName).AppendLine(e.StackTrace);
+            var log = new FileInfo(ErrorLogPath);
+            if (log.Exists && log.Length > 1024 * 1024) log.Delete(); // 大きくなりすぎたら作り直す
+            File.AppendAllText(ErrorLogPath, text.AppendLine().ToString());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     /// <summary>ロック（FR-03）。鍵を破棄し、アプリがコピーしたクリップボードの中身も消す。</summary>
     [RelayCommand]
     public void Lock()

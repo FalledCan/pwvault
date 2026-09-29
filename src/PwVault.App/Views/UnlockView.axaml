@@ -11,6 +11,12 @@
                     <TextBlock Classes="muted" FontSize="12" Text="{Binding VaultPath}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
+                <!-- ロックしたときの事情（打ち間違えても消えない） -->
+                <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="12"
+                        IsVisible="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <SelectableTextBlock Classes="warning" Text="{Binding Notice}" TextWrapping="Wrap" />
+                </Border>
+
                 <StackPanel>
                     <TextBlock Classes="label" Text="マスターパスワード" />
                     <TextBox x:Name="PasswordBox" PasswordChar="●" Text="{Binding Password}"

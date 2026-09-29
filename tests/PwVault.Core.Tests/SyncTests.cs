@@ -124,7 +124,7 @@ public class SyncTests
     }
 
     [Fact]
-    public void MasterPasswordChangedOnOtherDevice_IsAdopted()
+    public void MasterPasswordChangedOnOtherDevice_IsNotAdoptedSilently_NorOverwritten()
     {
         using var dir = new TempDir();
         var path = dir.File("vault.pwv");
@@ -135,13 +135,45 @@ public class SyncTests
         pc1.ChangeMasterPassword(Password, newPassword);
         pc1.Save(3);
 
+        // PC2 は新しいヘッダを勝手に受け入れず、古いパスワードで書き戻しもしない（ロックして開き直してもらう）
         pc2.AddEntry(Entry("PC2 で追加"));
-        pc2.Save(3); // PC1 の新しいヘッダを取り込んでから書く（古いパスワードで書き戻さない）
+        Assert.Equal(VaultErrorKind.HeaderChanged, Assert.Throws<VaultException>(() => pc2.SyncFromDisk()).Kind);
+        Assert.Equal(VaultErrorKind.HeaderChanged, Assert.Throws<VaultException>(() => pc2.Save(3)).Kind);
+        Assert.True(pc2.VerifyPassword(Password));
 
-        Assert.Throws<VaultException>(() => Vault.Open(path, Password).Dispose());
-        using var reopened = Vault.Open(path, newPassword);
+        using var reopened = Vault.Open(path, newPassword); // PC1 の変更はそのまま
+        Assert.Empty(reopened.GetEntries());
+
+        // PC2 の未保存の変更は、退避したコピーを新しいパスワードで開いた保管庫が取り込める（エントリだけ）
+        pc2.SaveCopyTo(dir.File("vault (保存できなかった変更 2026-09-30 120000).pwv"));
+        Assert.Single(reopened.MergeConflictCopies());
         Assert.Equal(["PC2 で追加"], Titles(reopened));
-        Assert.True(pc2.VerifyPassword(newPassword));
+        Assert.True(reopened.VerifyPassword(newPassword));
+    }
+
+    [Fact]
+    public void Attack_RollingBackHeaderToLeakedPassword_IsRejected()
+    {
+        // 漏れたのでマスターパスワードを変えた。クラウドを乗っ取った攻撃者が .bak の古いヘッダ（漏れたパスワード）に戻す
+        using var dir = new TempDir();
+        var path = dir.File("vault.pwv");
+        const string leaked = "old password that leaked!!", fresh = "brand new strong password";
+        using var vault = Vault.Create(path, leaked, TestKdf.Fast());
+        vault.AddEntry(Entry("bank", "secret-1"));
+        vault.Save(3);
+        vault.ChangeMasterPassword(leaked, fresh);
+        vault.Save(3);
+
+        var current = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
+        var old = VaultFileCodec.Deserialize(File.ReadAllBytes(Storage.AtomicFileStore.BackupPath(Path.GetFullPath(path), 1)));
+        File.WriteAllBytes(path, VaultFileCodec.Serialize(current with { Header = old.Header }));
+
+        // 開いている PwVault は受け入れず、新しいエントリをそのファイルに書かない
+        Assert.Equal(VaultErrorKind.HeaderChanged, Assert.Throws<VaultException>(() => vault.SyncFromDisk()).Kind);
+        vault.AddEntry(Entry("new account", "secret-2"));
+        Assert.Throws<VaultException>(() => vault.Save(3));
+        using var attacker = Vault.Open(path, leaked);
+        Assert.DoesNotContain(attacker.GetEntries(), e => e.Data.Title == "new account");
     }
 
     [Fact]

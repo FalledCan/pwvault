@@ -246,8 +246,24 @@ public partial class VaultViewModel : ViewModelBase
         catch (VaultException ex)
         {
             Status = ex.Message + "（変更はまだ保存されていません）";
+            // ほかの端末でマスターパスワードが変わっていた: この操作が終わってからロックする（変更は退避される）
+            if (ex.Kind is VaultErrorKind.HeaderChanged)
+                Dispatcher.UIThread.Post(LockForHeaderChange);
             return false;
         }
+    }
+
+    /// <summary>
+    /// ファイル側のマスターパスワード（鍵の設定）が変わっていたのでロックする。自動では受け入れない
+    /// （攻撃者が古い・漏れたパスワードに戻した場合に、黙って受け入れないため）。未保存の変更はロック時に退避される。
+    /// </summary>
+    private void LockForHeaderChange()
+    {
+        if (Main.CurrentPage != this) return; // もうロック済み
+        Main.AddLockNotice(
+            "ほかの端末でマスターパスワード（または鍵の設定）が変更されたため、ロックしました。新しいマスターパスワードでアンロックしてください。" +
+            "\n心当たりがない場合は、保管庫ファイルが書き換えられた可能性があります。アンロックせずに、保管庫の場所を確かめて、バックアップ（.bak）から戻すことを検討してください。");
+        Main.Lock();
     }
 
     /// <summary>
@@ -264,12 +280,12 @@ public partial class VaultViewModel : ViewModelBase
             try
             {
                 vault.SaveCopyTo(rescue);
-                Main.LockNotice = $"保存できなかった変更を、次のファイルに退避しました（暗号化済み）:\n{rescue}\n同じ保管庫なら、次にアンロックしたときに自動で取り込みます。";
+                Main.AddLockNotice($"保存できなかった変更を、次のファイルに退避しました（暗号化済み）:\n{rescue}\n同じ保管庫なら、次にアンロックしたときに自動で取り込みます。");
                 return;
             }
             catch (VaultException) { }
         }
-        Main.LockNotice = "保存できなかった変更があり、退避もできませんでした。";
+        Main.AddLockNotice("保存できなかった変更があり、退避もできませんでした。");
     }
 
     // ------------------------------------------------------------------ 他の端末との同期（同期フォルダ）
@@ -305,6 +321,10 @@ public partial class VaultViewModel : ViewModelBase
         catch (VaultException ex) when (ex.Kind is VaultErrorKind.Io or VaultErrorKind.Corrupted or VaultErrorKind.InvalidFormat)
         {
             // 同期アプリが書き込み中などで読めない。次の確認でやり直す
+        }
+        catch (VaultException ex) when (ex.Kind is VaultErrorKind.HeaderChanged)
+        {
+            LockForHeaderChange();
         }
         catch (VaultException ex)
         {

@@ -19,6 +19,11 @@ public enum VaultErrorKind
     QuickUnlockUnavailable,
     /// <summary>取り込もうとしたファイルが別の保管庫（保管庫 ID が違う）。</summary>
     DifferentVault,
+    /// <summary>
+    /// ファイルのヘッダ（マスターパスワード・KDF）が、ほかの端末（または攻撃者）によって変えられている。
+    /// 自動では受け入れず、ロックしてファイル側のマスターパスワードで開き直してもらう。
+    /// </summary>
+    HeaderChanged,
 }
 
 /// <summary>

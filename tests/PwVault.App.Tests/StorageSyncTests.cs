@@ -241,8 +241,8 @@ public class StorageSyncTests
 
         var rescue = Assert.Single(Directory.GetFiles(h.Dir, "vault (保存できなかった変更 *).pwv"));
         var unlock = h.Page<UnlockViewModel>();
-        Assert.Contains("退避しました", unlock.Error);
-        Assert.Contains(rescue, unlock.Error);
+        Assert.Contains("退避しました", unlock.Notice);
+        Assert.Contains(rescue, unlock.Notice);
         using (var rescued = Vault.Open(rescue, Master))
             Assert.Contains(rescued.GetEntries(), x => x.Data.Title == "ロック直前に追加");
 
@@ -253,6 +253,59 @@ public class StorageSyncTests
         vm = h.Page<VaultViewModel>();
         Assert.Equal(["ロック直前に追加", "元からある"], Titles(vm));
         Assert.False(File.Exists(rescue));
+    }
+
+    [AvaloniaFact]
+    public async Task MasterPasswordChangedOnAnotherPc_LocksAndReopensWithNewPassword()
+    {
+        using var h = new Harness();
+        const string newPassword = "a brand new master password";
+        var vm = await UnlockNew(h, h.VaultPath, "共通");
+        vm.Vault.AddEntry(Entry("この PC で追加（未保存）"));
+
+        using (var otherPc = Vault.Open(h.VaultPath, Master))
+        {
+            otherPc.ChangeMasterPassword(Master, newPassword);
+            otherPc.Save(3);
+        }
+        vm.SyncNow();
+
+        // 自動では受け入れず、ロックして知らせる。未保存の変更は退避される
+        var unlock = h.Page<UnlockViewModel>();
+        Assert.Contains("マスターパスワード（または鍵の設定）が変更された", unlock.Notice);
+        Assert.Contains("退避しました", unlock.Notice);
+        h.Screenshot("26-locked-after-password-change");
+        using (var check = Vault.Open(h.VaultPath, newPassword)) // ほかの PC の変更は壊していない
+            Assert.Single(check.GetEntries());
+
+        // 前のパスワードで試して失敗しても、案内は消えない
+        unlock.Password = Master;
+        await unlock.UnlockCommand.ExecuteAsync(null);
+        Assert.NotNull(unlock.Error);
+        Assert.Contains("マスターパスワード（または鍵の設定）が変更された", unlock.Notice);
+
+        // 新しいパスワードで開き直すと、退避した変更も取り込まれる
+        unlock.Password = newPassword;
+        await unlock.UnlockCommand.ExecuteAsync(null);
+        Assert.Equal(["この PC で追加（未保存）", "共通"], Titles(h.Page<VaultViewModel>()));
+    }
+
+    [AvaloniaFact]
+    public async Task UnexpectedError_SavesLocksAndLogsWithoutMessage()
+    {
+        using var h = new Harness();
+        var vm = await UnlockNew(h, h.VaultPath, "元からある");
+        vm.Vault.AddEntry(Entry("エラー直前に追加"));
+
+        Assert.True(h.Main.HandleUnexpectedError(new InvalidOperationException("message-that-might-contain-secret")));
+
+        var unlock = h.Page<UnlockViewModel>();
+        Assert.Contains("問題が起きたため", unlock.Notice);
+        using (var check = Vault.Open(h.VaultPath, Master))
+            Assert.Equal(2, check.GetEntries().Count); // ロック時に保存された
+        var log = File.ReadAllText(h.Main.ErrorLogPath);
+        Assert.Contains("System.InvalidOperationException", log);
+        Assert.DoesNotContain("message-that-might-contain-secret", log); // メッセージは記録しない
     }
 
     [AvaloniaFact]

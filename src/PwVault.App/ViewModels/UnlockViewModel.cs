@@ -29,10 +29,10 @@ public partial class UnlockViewModel : ViewModelBase
             _fileWatch.Tick += (_, _) => CheckVaultFile();
             _fileWatch.Start();
         }
-        // ロック時に保存できなかった変更を退避した、など（ファイルが見つからない案内より優先して見せる）
+        // ロック時に保存できなかった変更を退避した、など（専用の欄に出し、打ち間違えても消さない）
         if (main.LockNotice is { } notice)
         {
-            Error = notice;
+            Notice = notice;
             main.LockNotice = null;
         }
     }
@@ -140,6 +140,10 @@ public partial class UnlockViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string? Info { get; set; }
+
+    /// <summary>ロックしたときの事情（退避した変更の場所など）。パスワードを打ち間違えても消さずに出し続ける。</summary>
+    [ObservableProperty]
+    public partial string? Notice { get; set; }
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }

@@ -34,6 +34,18 @@ public partial class App : Application
             if (!Program.StartInBackground)
                 desktop.MainWindow = window;
 
+            // 想定外のエラーでアプリを落とさない: 変更を保存（できなければ退避）してロックし、ロック画面で知らせる。
+            // バックグラウンドの処理（アイコンの取得など）の見落とされた失敗は記録だけする
+            Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                if (main.HandleUnexpectedError(e.Exception)) e.Handled = true;
+            };
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                main.WriteErrorLog(e.Exception);
+                e.SetObserved();
+            };
+
             // ブラウザ拡張の「PwVault をアンロックする」から呼ばれたら前に出す
             main.ShowRequested += (_, _) => ShowWindow(window);
 

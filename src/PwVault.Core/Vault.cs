@@ -327,7 +327,7 @@ public sealed class Vault : IDisposable
             return false;
 
         var doc = VaultFileCodec.Deserialize(bytes);
-        var changed = Merge(doc, adoptHeader: true);
+        var changed = Merge(doc, checkHeader: true);
         _diskHash = hash;
         _diskHeader = doc.Header;
         if (!ToBytes().AsSpan().SequenceEqual(bytes))
@@ -358,7 +358,7 @@ public sealed class Vault : IDisposable
             {
                 var doc = VaultFileCodec.Deserialize(ReadVaultFile(path));
                 if (doc.Header.VaultId != VaultId) { _rejectedCopies.Add(stamp); continue; }
-                Merge(doc, adoptHeader: false);
+                Merge(doc, checkHeader: false);
                 merged.Add(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException)
@@ -438,21 +438,25 @@ public sealed class Vault : IDisposable
     /// 両方が同じ版から別々に変えていた（リビジョンが同じ）ときは、負けた側のパスワードを勝った側の履歴に残す。
     /// 取り込むエントリはすべて保管庫鍵で認証してから反映する（1 つでも失敗したら何も反映しない）。
     /// </summary>
-    private bool Merge(VaultDocument doc, bool adoptHeader)
+    /// <param name="checkHeader">
+    /// 本体のファイルのとき true。ヘッダ（マスターパスワード・KDF）が前に見たものから変わっていたら、
+    /// 何も取り込まずに <see cref="VaultErrorKind.HeaderChanged"/> を投げる。
+    /// 自動で受け入れると、ファイルを書き換えられる攻撃者が古い（漏れた）パスワードのヘッダに戻したとき、
+    /// 以後の保存がそのパスワードで開けるものになってしまうため（敵対検証で確認）。受け入れも書き戻しもせず、
+    /// ロックして、ファイル側のマスターパスワードで開き直してもらう。競合コピーのヘッダは見ない（エントリだけ取り込む）。
+    /// </param>
+    private bool Merge(VaultDocument doc, bool checkHeader)
     {
         EnsureUnlocked();
         if (doc.Header.VaultId != _header.VaultId)
             throw new VaultException(VaultErrorKind.DifferentVault, "別の保管庫のファイルです。");
+        if (checkHeader && !SameHeader(doc.Header, _diskHeader) && !SameHeader(doc.Header, _header))
+            throw new VaultException(VaultErrorKind.HeaderChanged,
+                "ほかの端末でマスターパスワード（または鍵の設定）が変更されています。");
 
         var incoming = doc.Entries.Select(r => (Record: r, Data: DecryptEntry(doc.Header, _vaultKey!, r))).ToList();
 
         var changed = false;
-        // 他の端末でマスターパスワードや KDF を変えていたら、こちらも合わせる（こちらでも変えていたらこちらを優先）
-        if (adoptHeader && !SameHeader(doc.Header, _header) && SameHeader(_header, _diskHeader))
-        {
-            _header = doc.Header;
-            changed = true;
-        }
 
         foreach (var (theirs, theirData) in incoming)
         {
