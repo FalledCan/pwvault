@@ -16,7 +16,9 @@ public static class AutoTypeMatcher
     /// <summary>比べるための形（小文字・ファイル名だけ・「.exe」なし）。</summary>
     public static string Normalize(string app)
     {
-        var name = Path.GetFileName(app.Trim().Trim('"')).ToLowerInvariant();
+        // フォルダの区切りは OS によらず \ と / の両方（Windows のパスを Mac で扱っても同じ結果にする）
+        var trimmed = app.Trim().Trim('"');
+        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..].ToLowerInvariant();
         return name.EndsWith(".exe", StringComparison.Ordinal) ? name[..^4] : name;
     }
 
