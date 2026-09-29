@@ -8,10 +8,10 @@ namespace PwVault.App.Views;
 /// </summary>
 public static class WindowChrome
 {
-    public const double TitleBarHeight = 48;
+    public const double TitleBarHeight = 58;
 
-    /// <summary>上部の帯の内側の余白。</summary>
+    /// <summary>上部の帯の内側の余白（上はウィンドウの縁との間を少し空ける）。</summary>
     public static Thickness TitleBarPadding { get; } = OperatingSystem.IsMacOS()
-        ? new Thickness(80, 0, 12, 0)   // 左上の信号ボタンの分
-        : new Thickness(12, 0, 150, 0); // 右上の 3 つのボタン（46 × 3）の分
+        ? new Thickness(80, 8, 12, 0)   // 左上の信号ボタンの分
+        : new Thickness(12, 8, 150, 0); // 右上の 3 つのボタン（46 × 3）の分
 }
