@@ -12,6 +12,7 @@ const ROOT = "pwvault-root";
 const REFRESH = "pwvault-refresh";
 const OPEN = "pwvault-open";
 const ENTRY_PREFIX = "pwvault-entry:";
+const OTP_PREFIX = "pwvault-otp:";
 const CONTEXTS = ["editable"];
 const PAGES = ["http://*/*", "https://*/*"];
 const IS_FIREFOX = typeof globalThis.browser !== "undefined" && !!api.runtime.getBrowserInfo;
@@ -89,9 +90,19 @@ function rebuild(url, { force = false } = {}) {
 
     const entries = response.ok ? response.entries ?? [] : [];
     if (entries.length > 0) {
-      for (const e of entries.slice(0, 10)) {
+      const shown = entries.slice(0, 10);
+      for (const e of shown) {
         const title = e.username ? `${e.title}（${e.username}）` : e.title;
         await create({ id: ENTRY_PREFIX + e.id, parentId: ROOT, title: label(title) });
+      }
+      // ワンタイムパスワードを設定しているエントリは、2 段階認証の欄に入れる項目も出す
+      const withOtp = shown.filter((e) => e.totp);
+      if (withOtp.length > 0) {
+        await create({ id: "pwvault-otp-sep", parentId: ROOT, type: "separator" });
+        for (const e of withOtp) {
+          const name = e.username ? `${e.title}（${e.username}）` : e.title;
+          await create({ id: OTP_PREFIX + e.id, parentId: ROOT, title: label(`🔢 ワンタイムパスワード: ${name}`) });
+        }
       }
     } else if (response.error === "locked" || response.error === "not_running") {
       // 押すと PwVault のアンロック画面を前に出す（起動していなければ起動する）。
@@ -235,6 +246,45 @@ function fillCredentials(username, password, expectedOrigin) {
   return { ok: filled.length > 0, filled };
 }
 
+/**
+ * ページ内で実行する。右クリックされた欄（＝フォーカス中の欄）にワンタイムパスワードを入れる。
+ * 1 文字ずつの欄が並んでいる形（6 個の枠など）なら、続く欄に 1 文字ずつ入れる。
+ */
+function fillOtp(code, expectedOrigin) {
+  if (location.origin !== expectedOrigin) return { ok: false, reason: "origin" };
+
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  const usable = (el) => el instanceof HTMLInputElement && !el.disabled && !el.readOnly && visible(el) &&
+    ["text", "tel", "number", "password", ""].includes(el.type);
+  const setValue = (el, value) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    el.focus();
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  if (!usable(active)) return { ok: false, reason: "field" };
+
+  if (active.maxLength === 1) {
+    // 1 文字ずつの欄: 右クリックした欄を含む、ちょうど桁数ぶんの 1 文字欄の並び（近い親の中）に、先頭から入れる。
+    // 桁数より多く並んでいたら（別の欄の並びまで広がった）どれか分からないので入れない
+    for (let node = active.parentElement, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
+      const boxes = [...node.querySelectorAll("input")].filter((el) => usable(el) && el.maxLength === 1);
+      if (boxes.length < code.length) continue;
+      if (boxes.length > code.length) break;
+      [...code].forEach((ch, i) => setValue(boxes[i], ch));
+      boxes[code.length - 1].focus();
+      return { ok: true };
+    }
+  }
+  // 桁数より短い欄（1 文字欄が足りないなど）には入れない
+  if (active.maxLength > 0 && active.maxLength < code.length) return { ok: false, reason: "field" };
+  setValue(active, code);
+  return { ok: true };
+}
+
 /** ページ内に短い通知を出す（失敗時の案内）。 */
 function showToast(message) {
   const host = document.createElement("div");
@@ -282,6 +332,7 @@ async function openAndWatch(tab) {
 async function handleClick(info, tab) {
   if (info.menuItemId === REFRESH) return rebuild(tab?.url, { force: true });
   if (info.menuItemId === OPEN && tab) return openAndWatch(tab);
+  if (typeof info.menuItemId === "string" && info.menuItemId.startsWith(OTP_PREFIX) && tab) return handleOtpClick(info, tab);
   if (typeof info.menuItemId !== "string" || !info.menuItemId.startsWith(ENTRY_PREFIX) || !tab) return;
 
   const id = info.menuItemId.slice(ENTRY_PREFIX.length);
@@ -308,6 +359,36 @@ async function handleClick(info, tab) {
       args: [response.username ?? "", response.password ?? "", new URL(frameUrl).origin],
     });
     if (!result?.result?.ok) await toast(tab.id, "入力欄が見つかりませんでした。");
+  } catch {
+    await toast(tab.id, "この入力欄には入力できませんでした（別サイトの埋め込み枠など）。");
+  }
+}
+
+/** 「ワンタイムパスワード: …」を選んだとき。コードは PwVault 本体が作り、キーはブラウザに渡らない。 */
+async function handleOtpClick(info, tab) {
+  const id = info.menuItemId.slice(OTP_PREFIX.length);
+  const frameUrl = info.frameUrl || info.pageUrl || tab.url;
+  if (!isWebUrl(frameUrl)) return toast(tab.id, "このページでは使えません。");
+
+  const response = await send({ type: "otp", url: frameUrl, id });
+  if (!response.ok && response.error === "locked") {
+    await toast(tab.id, "PwVault がロックされたので、アンロック画面を開きました。アンロック後にもう一度選んでください。");
+    return openAndWatch(tab);
+  }
+  if (!response.ok || !response.code) {
+    const message = response.error === "no_match"
+      ? "このエントリはこのサイト用ではないため入力しませんでした。"
+      : errorText(response.error);
+    return toast(tab.id, message);
+  }
+
+  try {
+    const [result] = await api.scripting.executeScript({
+      target: { tabId: tab.id, frameIds: [info.frameId ?? 0] },
+      func: fillOtp,
+      args: [response.code, new URL(frameUrl).origin],
+    });
+    if (!result?.result?.ok) await toast(tab.id, "ワンタイムパスワードの入力欄で右クリックしてください。");
   } catch {
     await toast(tab.id, "この入力欄には入力できませんでした（別サイトの埋め込み枠など）。");
   }
@@ -344,4 +425,4 @@ if (menus.onShown && menus.refresh) {
 }
 
 // E2E テスト用の入口（テストが DevTools から呼ぶ）
-globalThis.__pwvault = { state, rebuild, handleClick, fillCredentials, openAndWatch };
+globalThis.__pwvault = { state, rebuild, handleClick, fillCredentials, fillOtp, openAndWatch };

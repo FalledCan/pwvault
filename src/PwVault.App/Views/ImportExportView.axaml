@@ -22,6 +22,48 @@
 
             <Border Classes="card">
                 <StackPanel Spacing="12">
+                    <TextBlock Classes="h2" Text="Google Authenticator から移す" />
+                    <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                               Text="スマホの Google Authenticator に登録しているワンタイムパスワードを、サイト側の設定を変えずにそのまま取り込みます。取り込んだ後も、スマホと PwVault の両方に同じ番号が出ます。" />
+                    <Button Classes="accent" Content="QR コードを読み取る…" Command="{Binding ScanMigrationCommand}" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding OtpStatus}" IsVisible="{Binding OtpStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                    <StackPanel Spacing="8" IsVisible="{Binding HasOtpItems}">
+                        <Grid ColumnDefinitions="Auto,*,260" ColumnSpacing="10">
+                            <TextBlock Grid.Column="1" Classes="label" Text="アカウント" />
+                            <TextBlock Grid.Column="2" Classes="label" Text="取り込み先" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding OtpItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OtpImportItem">
+                                    <Grid ColumnDefinitions="Auto,*,260" ColumnSpacing="10" Margin="0,3">
+                                        <CheckBox IsChecked="{Binding Include}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Classes="muted" FontSize="12" Text="{Binding Note}" IsVisible="{Binding HasNote}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" IsEnabled="{Binding Include}"
+                                                  ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OtpTarget">
+                                                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                            <Button Content="やめる" Command="{Binding CancelOtpCommand}" />
+                            <Button Classes="accent" Content="取り込む" Command="{Binding ImportOtpCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="12">
                     <TextBlock Classes="h2" Text="暗号化バックアップ" />
                     <TextBlock Classes="muted" FontSize="13"
                                Text="保管庫を暗号化したまま別の場所（USB メモリなど）に書き出します。開くには現在のマスターパスワードが必要です。" />
@@ -34,7 +76,7 @@
                 <StackPanel Spacing="12">
                     <TextBlock Classes="h2" Text="平文 CSV に書き出す" />
                     <TextBlock Classes="error"
-                               Text="⚠ 書き出したファイルは暗号化されていません。すべてのパスワードが誰でも読める状態になります。他のパスワードマネージャーへの移行など、必要なときだけ使い、終わったらすぐに削除してください。" />
+                               Text="⚠ 書き出したファイルは暗号化されていません。すべてのパスワード（とワンタイムパスワードのキー）が誰でも読める状態になります。他のパスワードマネージャーへの移行など、必要なときだけ使い、終わったらすぐに削除してください。" />
                     <CheckBox IsChecked="{Binding CsvAcknowledged}" Content="平文で保存されることを理解しました" />
                     <StackPanel>
                         <TextBlock Classes="label" Text="確認のためマスターパスワードを入力" />

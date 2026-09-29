@@ -52,6 +52,20 @@
                         <TextBox Text="{Binding Url}" PlaceholderText="https://" />
                     </StackPanel>
 
+                    <!-- ワンタイムパスワード（2 段階認証の 6 桁） -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="label" Text="ワンタイムパスワード（2 段階認証）のキー" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <TextBox PasswordChar="●" FontFamily="Consolas, monospace" RevealPassword="{Binding RevealTotp}"
+                                     Text="{Binding TotpText}" PlaceholderText="使わない場合は空のまま" />
+                            <ToggleButton Grid.Column="1" Content="表示" IsChecked="{Binding RevealTotp}" />
+                            <Button Grid.Column="2" Content="QR を読み取る…" Command="{Binding ScanTotpQrCommand}" />
+                        </Grid>
+                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding !HasTotpText}"
+                                   Text="サイトの 2 段階認証の設定画面に出る QR コードを読み取るか、「QR を読み取れない場合」などに出るキーの文字列を貼り付けてください。スマホの認証アプリ（Google Authenticator など）と同じ番号が出ます。" />
+                        <TextBlock FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasTotpText}" Text="{Binding TotpPreview}" />
+                    </StackPanel>
+
                     <StackPanel>
                         <TextBlock Classes="label" Text="タグ（カンマ区切り）" />
                         <TextBox Text="{Binding TagsText}" PlaceholderText="仕事, 銀行" />
@@ -71,6 +85,7 @@
                         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                                    Text="ショートカットキーで自動入力するとき、ここに書いたアプリでは確認なしで入力します。入力するときに「紐付けて入力」を選んでも追加されます。&#x0a;複数のアカウントを使う場合は、アカウントごとにエントリを作り、どれにも同じアプリを書いてください（選択窓で番号のキーで選べ、前回使ったアカウントが最初から選ばれます）。" />
                         <CheckBox Content="パスワードだけを入力する（ID は入力しない）" IsChecked="{Binding AutoTypePasswordOnly}" />
+                        <CheckBox Content="パスワードの後に Tab → ワンタイムパスワードも入力する" IsChecked="{Binding AutoTypeTotp}" IsEnabled="{Binding HasTotpText}" />
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,4,0,0">
                             <TextBlock VerticalAlignment="Center" Text="このアプリが前に出たとき" />
                             <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding OnOpenOptions}" SelectedItem="{Binding SelectedOnOpen}">

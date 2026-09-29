@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PwVault.App.ViewModels"
+             x:Class="PwVault.App.Views.QrScanView"
+             x:DataType="vm:QrScanViewModel">
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </UserControl.KeyBindings>
+
+    <Border Classes="card" Width="560">
+        <StackPanel Spacing="12">
+            <TextBlock Classes="h2" Text="{Binding Heading}" TextWrapping="Wrap" />
+            <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap" Text="{Binding Hint}" />
+
+            <!-- カメラの映像（鏡のように左右を反転して見せる。読み取りは反転前の映像で行う） -->
+            <Border CornerRadius="8" ClipToBounds="True" Height="300" Background="{DynamicResource OverlayBackground}"
+                    IsVisible="{Binding CameraSupported}">
+                <Panel>
+                    <Image Source="{Binding Preview}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsVisible="{Binding HasPreview}">
+                        <Image.RenderTransform>
+                            <ScaleTransform ScaleX="-1" />
+                        </Image.RenderTransform>
+                    </Image>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="{Binding !IsCameraOn}">
+                        <Button Classes="accent" HorizontalAlignment="Center" Content="📷 カメラで読み取る"
+                                IsEnabled="{Binding !IsStarting}" Command="{Binding StartCameraCommand}" />
+                        <TextBlock Foreground="White" FontSize="12" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
+                                   Text="スマホに QR コードを出して、PC のカメラに向けてください。&#x0a;映像は読み取りにだけ使い、保存・送信はしません。" />
+                    </StackPanel>
+                    <TextBlock Foreground="White" FontSize="12" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                               IsVisible="{Binding IsCameraOn}" Text="QR コードを枠いっぱいに写してください" />
+                </Panel>
+            </Border>
+
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="{Binding Message}"
+                       IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Classes="error" TextWrapping="Wrap" Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                       Text="スクリーンショットから読むこともできます。そのスクリーンショットには 2 段階認証のキーがそのまま入っているので、クラウドやメッセージアプリで送らず、読み取ったらスマホと PC の両方から削除してください（写真アプリの「最近削除した項目」も）。" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Content="カメラを止める" IsVisible="{Binding IsCameraOn}" Command="{Binding StopCameraCommand}" />
+                <Button Content="画像から読み取る…" Command="{Binding OpenImageCommand}" />
+                <Button Content="閉じる" Command="{Binding CancelCommand}" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

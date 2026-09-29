@@ -171,7 +171,7 @@ public partial class AutoTypePickerViewModel : ViewModelBase
 
         IsTyping = true; // 選択窓を隠して、元の画面を前に戻してから打つ
         var target = Target;
-        if (await AutoTyper.TypeAsync(_platform, target, entry.Data, _main.AutoTypeDelay, activate: true) is { } error)
+        if (await AutoTyper.TypeAsync(_platform, target, entry.Data, _main.AutoTypeDelay, activate: true, _main.Clock) is { } error)
         {
             Fail(error);
             return;

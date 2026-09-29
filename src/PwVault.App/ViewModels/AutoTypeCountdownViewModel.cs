@@ -60,7 +60,7 @@ public partial class AutoTypeCountdownViewModel : ViewModelBase
             Stop(null);
             return;
         }
-        var error = await AutoTyper.TypeAsync(_platform, Target, entry.Data, TimeSpan.Zero, activate: false);
+        var error = await AutoTyper.TypeAsync(_platform, Target, entry.Data, TimeSpan.Zero, activate: false, _main.Clock);
         if (error is null) _main.RememberAutoTypeEntry(Target.ProcessName, EntryId);
         Stop(error ?? $"「{entry.Data.Title}」を {Target.ProcessName} に入力しました。");
     }

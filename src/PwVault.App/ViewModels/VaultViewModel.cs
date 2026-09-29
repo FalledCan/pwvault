@@ -70,6 +70,82 @@ public partial class VaultViewModel : ViewModelBase
         _syncTimer = new DispatcherTimer { Interval = main.VaultSyncInterval };
         _syncTimer.Tick += (_, _) => SyncNow();
         _syncTimer.Start();
+
+        // 選んでいるエントリのワンタイムパスワードを 1 秒ごとに更新する
+        _totpTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _totpTimer.Tick += (_, _) =>
+        {
+            UpdateTotp();
+            Editor?.RefreshTotpPreview();
+        };
+        _totpTimer.Start();
+    }
+
+    private readonly DispatcherTimer _totpTimer;
+
+    // ------------------------------------------------------------------ ワンタイムパスワード
+
+    /// <summary>選んでいるエントリの、今のワンタイムパスワード（3 桁ごとに区切る）。無ければ null。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTotp))]
+    public partial string? TotpCode { get; set; }
+
+    public bool HasTotp => TotpCode is not null;
+
+    /// <summary>今のコードが変わるまでの秒数。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TotpRemainingText))]
+    public partial int TotpRemaining { get; set; }
+
+    /// <summary>コードが変わる間隔（秒）。進み具合の棒の最大値。</summary>
+    [ObservableProperty]
+    public partial int TotpPeriod { get; set; } = 30;
+
+    public string TotpRemainingText => $"あと {TotpRemaining} 秒";
+
+    /// <summary>選んでいるエントリのワンタイムパスワードを作り直す（1 秒ごと・選択が変わったとき）。</summary>
+    public void UpdateTotp()
+    {
+        if (SelectedItem?.Entry.Data is not { HasTotp: true } data || Core.Otp.TotpKey.FromStored(data.Totp) is not { } key)
+        {
+            TotpCode = null;
+            return;
+        }
+        var now = Main.Clock.GetUtcNow();
+        TotpCode = FormatCode(key.Generate(now));
+        TotpPeriod = key.Period;
+        TotpRemaining = key.SecondsRemaining(now);
+    }
+
+    /// <summary>読みやすく区切る（6 桁は「123 456」、8 桁は「1234 5678」）。</summary>
+    public static string FormatCode(string code) => code.Length switch
+    {
+        6 => code[..3] + " " + code[3..],
+        8 => code[..4] + " " + code[4..],
+        _ => code,
+    };
+
+    [RelayCommand]
+    private void CopyTotp()
+    {
+        if (SelectedItem?.Entry.Data is { HasTotp: true } data && Core.Otp.TotpKey.FromStored(data.Totp) is { } key)
+            CopyToClipboard(key.Generate(Main.Clock.GetUtcNow()), "ワンタイムパスワード");
+    }
+
+    /// <summary>表示中の QR コードの読み取り画面（無ければ null）。</summary>
+    [ObservableProperty]
+    public partial QrScanViewModel? QrScan { get; set; }
+
+    /// <summary>QR コードの読み取り画面を出す。読めた文字は accept に渡す。</summary>
+    public QrScanViewModel OpenQrScan(string heading, string hint, Func<string, QrAccept> accept)
+    {
+        _ = QrScan?.CloseAsync();
+        return QrScan = new QrScanViewModel(this, heading, hint, accept);
+    }
+
+    public void CloseQrScan(QrScanViewModel scan)
+    {
+        if (QrScan == scan) QrScan = null;
     }
 
     public MainViewModel Main { get; }
@@ -166,7 +242,11 @@ public partial class VaultViewModel : ViewModelBase
         ApplyFilter();
     }
 
-    partial void OnSelectedItemChanged(EntryItemViewModel? value) => RevealPassword = false;
+    partial void OnSelectedItemChanged(EntryItemViewModel? value)
+    {
+        RevealPassword = false;
+        UpdateTotp();
+    }
 
     // ------------------------------------------------------------------ 一覧の更新
 
@@ -617,6 +697,8 @@ public partial class VaultViewModel : ViewModelBase
     public string Close()
     {
         _syncTimer.Stop();
+        _totpTimer.Stop();
+        _ = QrScan?.CloseAsync(); // カメラを消す
         Main.Clipboard.CountdownChanged -= OnClipboardCountdown;
         var path = _vault?.FilePath ?? Main.Settings.VaultPath ?? "";
         if (_vault is { IsDirty: true } && !Persist()) RescueUnsaved(_vault);
@@ -626,8 +708,10 @@ public partial class VaultViewModel : ViewModelBase
         _vault = null;
         Editor = null;
         Generator = null;
+        QrScan = null;
         SubPage = null;
         SelectedItem = null;
+        TotpCode = null;
         Items.Clear();
         Filters.Clear();
         return path;

@@ -8,7 +8,7 @@ namespace PwVault.Core.Interop;
 /// </summary>
 public static class CsvExporter
 {
-    private static readonly string[] Header = ["title", "username", "password", "url", "notes", "tags", "created_at", "favorite"];
+    private static readonly string[] Header = ["title", "username", "password", "url", "notes", "tags", "created_at", "favorite", "totp"];
 
     public static string Export(IEnumerable<VaultEntry> entries) =>
         Csv.Write(
@@ -25,5 +25,6 @@ public static class CsvExporter
                         string.Join(';', e.Data.Tags),
                         e.Data.CreatedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
                         e.Data.Favorite ? "true" : "false",
+                        e.Data.Totp,
                     ])));
 }

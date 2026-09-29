@@ -36,6 +36,17 @@ public sealed class EntryData
     /// </summary>
     public List<string> AutoTypeIgnoreTitles { get; set; } = [];
 
+    /// <summary>
+    /// ワンタイムパスワード（TOTP）の元。otpauth://totp/... の形（<see cref="Otp.TotpKey.ToUri"/>）。空なら使わない。
+    /// </summary>
+    public string Totp { get; set; } = "";
+
+    /// <summary>自動タイプで、パスワードの後に Tab → ワンタイムパスワードも打つ。</summary>
+    public bool AutoTypeTotp { get; set; }
+
+    [JsonIgnore]
+    public bool HasTotp => Totp.Length > 0;
+
     [JsonIgnore]
     public bool IsTrashed => TrashedAt is not null;
 
@@ -55,6 +66,8 @@ public sealed class EntryData
         AutoType = AutoType,
         AutoTypeOnOpen = AutoTypeOnOpen,
         AutoTypeIgnoreTitles = [.. AutoTypeIgnoreTitles],
+        Totp = Totp,
+        AutoTypeTotp = AutoTypeTotp,
     };
 }
 

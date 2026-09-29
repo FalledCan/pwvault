@@ -10,11 +10,12 @@ namespace PwVault.App.Services;
 public static class AutoTyper
 {
     /// <param name="activate">先に入力先を前面に戻すか（選択窓から入力するときは true）。</param>
+    /// <param name="clock">ワンタイムパスワードを打つときの時刻。</param>
     /// <returns>打てなかったときの理由。打てたら null。</returns>
-    public static async Task<string?> TypeAsync(IAutoTypePlatform platform, TargetWindow target, EntryData data, TimeSpan delay, bool activate)
+    public static async Task<string?> TypeAsync(IAutoTypePlatform platform, TargetWindow target, EntryData data, TimeSpan delay, bool activate,
+        TimeProvider clock)
     {
-        var actions = AutoTypeMatcher.Sequence(data);
-        if (actions.Count == 0)
+        if (AutoTypeMatcher.Sequence(data, clock.GetUtcNow()).Count == 0)
             return "このエントリには、入力するユーザー ID・パスワードがありません。";
 
         if (activate)
@@ -24,6 +25,9 @@ public static class AutoTyper
                 return "入力先の画面を前に戻せませんでした。";
             await Task.Delay(delay);
         }
+
+        // ワンタイムパスワードは打つ直前の時刻で作る
+        var actions = AutoTypeMatcher.Sequence(data, clock.GetUtcNow());
 
         try
         {

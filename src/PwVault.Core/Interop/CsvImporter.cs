@@ -72,6 +72,14 @@ public static class CsvImporter
             }
             if (entry.CreatedAt == default) entry.CreatedAt = now;
             if (entry.Title.Length == 0) entry.Title = HostOf(entry.Url) ?? entry.Username;
+            // ワンタイムパスワードの元（otpauth:// かキーの文字列）。読めない形式（Steam など）は取り込まない
+            var totp = format switch
+            {
+                CsvFormat.Bitwarden => Get("login_totp"),
+                CsvFormat.KeePassXC or CsvFormat.PwVault => Get("totp"),
+                _ => "",
+            };
+            entry.Totp = Otp.TotpKey.Normalize(totp, entry.Title, entry.Username);
             entries.Add(entry);
         }
 

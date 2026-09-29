@@ -158,6 +158,68 @@ public sealed class FakeAutoType : IAutoTypePlatform
     }
 }
 
+/// <summary>カメラの代わり（本物のカメラは点けない）。テストが Send でコマを届ける。</summary>
+public sealed class FakeCamera : ICameraSource
+{
+    public bool IsOn => _onFrame is not null;
+    public int Starts { get; private set; }
+
+    /// <summary>設定すると、点けるときにこの理由で失敗する（許可されていないなど）。</summary>
+    public string? FailWith { get; set; }
+
+    private Action<CameraFrame>? _onFrame;
+
+    public Task<IAsyncDisposable> StartAsync(Action<CameraFrame> onFrame)
+    {
+        if (FailWith is not null) throw new CameraException(FailWith);
+        Starts++;
+        _onFrame = onFrame;
+        return Task.FromResult<IAsyncDisposable>(new Session(this));
+    }
+
+    /// <summary>1 コマ届ける。</summary>
+    public void Send(CameraFrame frame) => _onFrame?.Invoke(frame);
+
+    private sealed class Session(FakeCamera owner) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            owner._onFrame = null;
+            return ValueTask.CompletedTask;
+        }
+    }
+}
+
+/// <summary>テスト用の QR コードの画像（ZXing で作る）。</summary>
+public static class TestQr
+{
+    public static CameraFrame Frame(string text, int size = 360)
+    {
+        var writer = new ZXing.QrCode.QRCodeWriter();
+        var matrix = writer.encode(text, ZXing.BarcodeFormat.QR_CODE, size, size);
+        var bgra = new byte[size * size * 4];
+        for (var y = 0; y < size; y++)
+            for (var x = 0; x < size; x++)
+            {
+                var v = matrix[x, y] ? (byte)0 : (byte)255;
+                var i = (y * size + x) * 4;
+                bgra[i] = bgra[i + 1] = bgra[i + 2] = v;
+                bgra[i + 3] = 255;
+            }
+        return new CameraFrame(bgra, size, size);
+    }
+
+    /// <summary>QR コードの PNG を書き出す（スクリーンショットから読む場合）。</summary>
+    public static void SavePng(string text, string path)
+    {
+        var frame = Frame(text);
+        using var bitmap = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(frame.Width, frame.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul));
+        System.Runtime.InteropServices.Marshal.Copy(frame.Bgra, 0, bitmap.GetPixels(), frame.Bgra.Length);
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        File.WriteAllBytes(path, data.ToArray());
+    }
+}
+
 public sealed class MutableClock : TimeProvider
 {
     public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
@@ -199,6 +261,9 @@ public sealed class Harness : IDisposable
     /// <summary>レジストリはテスト用のキー、ファイルは一時フォルダに書く。</summary>
     public PwVault.App.Bridge.BrowserIntegration Integration { get; }
     public string RegistryBase { get; } = @"Software\PwVaultTest\" + Guid.NewGuid().ToString("N");
+
+    /// <summary>カメラの偽物（本物のカメラは点けない）。</summary>
+    public FakeCamera Camera { get; } = new();
 
     /// <summary>自動タイプの OS 機能の偽物（本物のショートカットキー登録・キー入力はしない）。</summary>
     public FakeAutoType AutoType { get; } = new();
@@ -245,7 +310,7 @@ public sealed class Harness : IDisposable
             documents: Path.Combine(Dir, "documents"), driveRoots: () => []);
         Main = new MainViewModel(store, new ClipboardService(() => IntPtr.Zero), AutoLock, Dialogs, Integration, PipeName,
             new FaviconFetcher(Icons), new UpdateService(Icons), Hello, Path.Combine(Dir, "localappdata"), Clock,
-            AutoStart, SyncFolders, AutoType);
+            AutoStart, SyncFolders, AutoType, Camera);
         Main.OpenInBrowser = OpenedUrls.Add;
         Main.AutoTypeDelay = TimeSpan.Zero;
         Main.VaultSyncInterval = TimeSpan.FromHours(1); // テストでは SyncNow を直接呼ぶ

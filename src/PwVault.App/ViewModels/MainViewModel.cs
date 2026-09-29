@@ -46,10 +46,12 @@ public partial class MainViewModel : ViewModelBase
         BrowserIntegration? browserIntegration = null, string? bridgePipeName = null, FaviconFetcher? iconFetcher = null,
         UpdateService? updates = null,
         IQuickUnlockProvider? quickUnlock = null, string? localDataDir = null, TimeProvider? clock = null,
-        AutoStart? autoStart = null, SyncFolderLocator? syncFolders = null, IAutoTypePlatform? autoTypePlatform = null)
+        AutoStart? autoStart = null, SyncFolderLocator? syncFolders = null, IAutoTypePlatform? autoTypePlatform = null,
+        ICameraSource? camera = null)
     {
         AutoStart = autoStart ?? (AutoStart.IsSupported ? new AutoStart() : null);
         AutoTypePlatform = autoTypePlatform ?? AutoTypePlatforms.CreateDefault();
+        Camera = camera ?? CameraSources.CreateDefault();
         SyncFolders = syncFolders ?? new SyncFolderLocator();
         QuickUnlock = quickUnlock ?? QuickUnlockProviders.CreateDefault();
         LocalDataDir = localDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PwVault");
@@ -80,6 +82,9 @@ public partial class MainViewModel : ViewModelBase
         RepairAutoStart();
         ApplyAutoTypeSettings();
     }
+
+    /// <summary>QR コードを写すカメラ（使えない OS では null。テストでは偽物）。</summary>
+    public ICameraSource? Camera { get; }
 
     // ------------------------------------------------------------------ 自動タイプ（ゲーム・アプリのログイン画面への入力）
 
@@ -524,7 +529,7 @@ public partial class MainViewModel : ViewModelBase
                 ShowRequested?.Invoke(this, EventArgs.Empty);
 
             var vault = CurrentPage as VaultViewModel is { IsUnlocked: true } v ? v : null;
-            var response = BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data));
+            var response = BridgeHandler.Handle(request, vault?.Vault.GetEntries(), (host, data) => vault?.Icons.StoreFromBrowser(host, data), Clock.GetUtcNow());
             response.ExtensionVersion = BrowserIntegration.BundledExtensionVersion;
             return response;
         }).GetTask();

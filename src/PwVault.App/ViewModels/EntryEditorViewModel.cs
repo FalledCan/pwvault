@@ -28,7 +28,63 @@ public partial class EntryEditorViewModel : ViewModelBase
         AutoTypePasswordOnly = _original.AutoType == AutoTypeMode.PasswordOnly;
         SelectedOnOpen = OnOpenOptions.First(o => o.Value == _original.AutoTypeOnOpen);
         AutoTypeIgnoreTitlesText = string.Join(Environment.NewLine, _original.AutoTypeIgnoreTitles);
+        TotpText = _original.Totp;
+        AutoTypeTotp = _original.AutoTypeTotp;
     }
+
+    // ------------------------------------------------------------------ ワンタイムパスワード
+
+    /// <summary>ワンタイムパスワードのキー（サイトに出るキーの文字列か otpauth://）。空なら使わない。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TotpPreview), nameof(HasTotpText))]
+    public partial string TotpText { get; set; } = "";
+
+    public bool HasTotpText => TotpText.Trim().Length > 0;
+
+    [ObservableProperty]
+    public partial bool RevealTotp { get; set; }
+
+    /// <summary>自動入力で、パスワードの後に Tab → ワンタイムパスワードも打つ。</summary>
+    [ObservableProperty]
+    public partial bool AutoTypeTotp { get; set; }
+
+    /// <summary>入力中のキーで作った今のコード（スマホの番号と同じか確かめてもらう）。読めなければ理由。</summary>
+    public string TotpPreview
+    {
+        get
+        {
+            if (!HasTotpText) return "";
+            if (!Core.Otp.TotpKey.TryParse(TotpText, out var key, out var error)) return "⚠ " + error;
+            var now = _owner.Main.Clock.GetUtcNow();
+            return $"今のコード: {VaultViewModel.FormatCode(key!.Generate(now))}（あと {key.SecondsRemaining(now)} 秒）… スマホの認証アプリと同じ番号なら正しく登録できています。";
+        }
+    }
+
+    /// <summary>コードの表示を新しくする（表示中は 1 秒ごと）。</summary>
+    public void RefreshTotpPreview() => OnPropertyChanged(nameof(TotpPreview));
+
+    [RelayCommand]
+    private void ScanTotpQr() => _owner.OpenQrScan(
+        "ワンタイムパスワードの QR コードを読み取る",
+        "サイトの 2 段階認証の設定画面に出る QR コードを、カメラに写すか、画像で読み込んでください。",
+        text =>
+        {
+            Core.Otp.TotpKey? key = null;
+            if (Core.Otp.GoogleAuthMigration.IsMigrationUri(text))
+            {
+                // 移行用の QR でも、1 件だけならそのまま使う
+                if (Core.Otp.GoogleAuthMigration.TryParse(text, out var batch, out _) && batch!.Keys.Count == 1)
+                    key = batch.Keys[0];
+                else
+                    return new QrAccept(false, "これは Google Authenticator の移行用の QR コード（複数のアカウント）です。「取込/書出」の「Google Authenticator から移す」で取り込んでください。");
+            }
+            else if (!Core.Otp.TotpKey.TryParse(text, out key, out var error))
+            {
+                return new QrAccept(false, "この QR コードは使えません: " + error);
+            }
+            TotpText = key!.ToUri();
+            return new QrAccept(true);
+        });
 
     /// <summary>アプリが開いたときに反応しない画面の名前（1 行に 1 つ。題名にこの文字を含む画面）。</summary>
     [ObservableProperty]
@@ -112,7 +168,20 @@ public partial class EntryEditorViewModel : ViewModelBase
             return;
         }
 
+        var totp = "";
+        if (HasTotpText)
+        {
+            if (!Core.Otp.TotpKey.TryParse(TotpText, out _, out var totpError))
+            {
+                Error = "ワンタイムパスワードのキー: " + totpError;
+                return;
+            }
+            totp = Core.Otp.TotpKey.Normalize(TotpText, EntryTitle, Username);
+        }
+
         var data = _original.Clone();
+        data.Totp = totp;
+        data.AutoTypeTotp = AutoTypeTotp;
         data.Title = EntryTitle.Trim();
         data.Username = Username.Trim();
         data.Password = Password;

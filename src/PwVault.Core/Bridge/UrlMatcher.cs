@@ -48,7 +48,7 @@ public static class UrlMatcher
     /// <summary>ページに合うエントリ（ゴミ箱外）を、完全一致 → お気に入り → タイトル順で返す。</summary>
     public static IReadOnlyList<VaultEntry> FindMatches(IEnumerable<VaultEntry> entries, string pageUrl) =>
         entries
-            .Where(e => !e.Data.IsTrashed && (e.Data.Password.Length > 0 || e.Data.Username.Length > 0))
+            .Where(e => !e.Data.IsTrashed && (e.Data.Password.Length > 0 || e.Data.Username.Length > 0 || e.Data.HasTotp))
             .Select(e => (Entry: e, Match: Match(pageUrl, e.Data.Url)))
             .Where(x => x.Match != UrlMatch.None)
             .OrderByDescending(x => x.Match)

@@ -168,6 +168,20 @@
                                         </Grid>
                                     </StackPanel>
 
+                                    <!-- ワンタイムパスワード -->
+                                    <StackPanel IsVisible="{Binding HasTotp}">
+                                        <TextBlock Classes="label" Text="ワンタイムパスワード" />
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <SelectableTextBlock FontFamily="Consolas, monospace" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                 Text="{Binding TotpCode}" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" MaxWidth="160" HorizontalAlignment="Left">
+                                                <ProgressBar Minimum="0" Maximum="{Binding TotpPeriod}" Value="{Binding TotpRemaining}" MinWidth="80" />
+                                                <TextBlock Classes="muted" FontSize="12" Text="{Binding TotpRemainingText}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="コピー" VerticalAlignment="Center" Command="{Binding CopyTotpCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+
                                     <StackPanel>
                                         <TextBlock Classes="label" Text="URL" />
                                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
@@ -220,6 +234,12 @@
         <Panel IsVisible="{Binding Generator, Converter={x:Static ObjectConverters.IsNotNull}}"
                Background="{DynamicResource OverlayBackground}">
             <ContentControl Content="{Binding Generator}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Panel>
+
+        <!-- QR コードの読み取り（オーバーレイ） -->
+        <Panel IsVisible="{Binding QrScan, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Background="{DynamicResource OverlayBackground}">
+            <ContentControl Content="{Binding QrScan}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Panel>
     </Panel>
 </UserControl>

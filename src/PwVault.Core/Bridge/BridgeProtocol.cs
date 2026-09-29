@@ -18,6 +18,9 @@ public sealed class BridgeRequest
     /// <summary>PwVault の画面（ロック中ならアンロック画面）を前に出す。起動していなければ中継が起動する。</summary>
     public const string TypeOpen = "open";
 
+    /// <summary>エントリのワンタイムパスワード（その時刻のコード）。キーそのものは渡さない。</summary>
+    public const string TypeOtp = "otp";
+
     public string? Type { get; set; }
     public string? Url { get; set; }
     public string? Id { get; set; }
@@ -40,6 +43,9 @@ public sealed class BridgeResponse
     public string? Username { get; set; }
     public string? Password { get; set; }
 
+    /// <summary>otp のとき: その時刻のワンタイムパスワード。</summary>
+    public string? Code { get; set; }
+
     /// <summary>open のとき、PwVault が起動していなかったので中継が起動した。</summary>
     public bool? Started { get; set; }
 
@@ -53,7 +59,8 @@ public sealed class BridgeResponse
 }
 
 /// <summary>候補一覧の 1 件。パスワードは含めない（入力を選んだときに 1 件ずつ渡す）。</summary>
-public sealed record BridgeEntry(string Id, string Title, string Username);
+/// <param name="Totp">ワンタイムパスワードを設定しているか（メニューに「ワンタイムパスワードを入力」を出す）。無ければ null。</param>
+public sealed record BridgeEntry(string Id, string Title, string Username, bool? Totp = null);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -140,8 +147,9 @@ public static class BridgeHandler
 
     /// <param name="entries">アンロック中なら全エントリ、ロック中なら null。</param>
     /// <param name="storeIcon">icon 要求で受け取ったアイコンを保存する（ホスト名, 画像データ）。</param>
+    /// <param name="now">ワンタイムパスワードの時刻（省略時は現在）。</param>
     public static BridgeResponse Handle(BridgeRequest? request, IReadOnlyList<VaultEntry>? entries,
-        Action<string, byte[]>? storeIcon = null)
+        Action<string, byte[]>? storeIcon = null, DateTimeOffset? now = null)
     {
         if (request?.Type is null)
             return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
@@ -161,7 +169,8 @@ public static class BridgeHandler
                 return new BridgeResponse
                 {
                     Ok = true,
-                    Entries = matches.Select(e => new BridgeEntry(e.Id.ToString("D"), e.Data.Title, e.Data.Username)).ToList(),
+                    Entries = matches.Select(e => new BridgeEntry(e.Id.ToString("D"), e.Data.Title, e.Data.Username,
+                        e.Data.HasTotp ? true : null)).ToList(),
                 };
 
             case BridgeRequest.TypeFill:
@@ -171,6 +180,16 @@ public static class BridgeHandler
                 return entry is null
                     ? BridgeResponse.Fail(BridgeResponse.ErrorNoMatch)
                     : new BridgeResponse { Ok = true, Username = entry.Data.Username, Password = entry.Data.Password };
+
+            case BridgeRequest.TypeOtp:
+                // fill と同じく、要求元のページがこのエントリのサイトであることを確かめてから、コードだけを渡す
+                if (!Guid.TryParse(request.Id, out var otpId))
+                    return BridgeResponse.Fail(BridgeResponse.ErrorBadRequest);
+                if (matches.FirstOrDefault(e => e.Id == otpId) is not { } otpEntry)
+                    return BridgeResponse.Fail(BridgeResponse.ErrorNoMatch);
+                return Otp.TotpKey.FromStored(otpEntry.Data.Totp) is { } key
+                    ? new BridgeResponse { Ok = true, Code = key.Generate(now ?? DateTimeOffset.UtcNow) }
+                    : BridgeResponse.Fail(BridgeResponse.ErrorNoMatch);
 
             case BridgeRequest.TypeIcon:
                 // 保存済みエントリがあるサイトのアイコンだけ受け取る（閲覧履歴を集めない）

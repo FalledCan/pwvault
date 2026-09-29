@@ -55,8 +55,11 @@ public static class AutoTypeMatcher
     public static bool IsIgnoredWindow(EntryData data, string title) =>
         data.AutoTypeIgnoreTitles.Any(t => t.Trim().Length > 0 && title.Contains(t.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>打ち込む手順。Enter は押さない（ログインするかは本人が決める）。空の項目は打たない。</summary>
-    public static IReadOnlyList<AutoTypeAction> Sequence(EntryData data)
+    /// <summary>
+    /// 打ち込む手順。Enter は押さない（ログインするかは本人が決める）。空の項目は打たない。
+    /// 設定していれば、パスワードの後に Tab → その時刻のワンタイムパスワードも打つ。
+    /// </summary>
+    public static IReadOnlyList<AutoTypeAction> Sequence(EntryData data, DateTimeOffset? now = null)
     {
         var actions = new List<AutoTypeAction>();
         if (data.AutoType == AutoTypeMode.UsernameTabPassword && data.Username.Length > 0)
@@ -66,6 +69,11 @@ public static class AutoTypeMatcher
         }
         if (data.Password.Length > 0)
             actions.Add(new AutoTypeAction.Text(data.Password));
+        if (data.AutoTypeTotp && Otp.TotpKey.FromStored(data.Totp) is { } totp)
+        {
+            if (actions.Count > 0) actions.Add(new AutoTypeAction.Tab());
+            actions.Add(new AutoTypeAction.Text(totp.Generate(now ?? DateTimeOffset.UtcNow)));
+        }
         return actions;
     }
 }
