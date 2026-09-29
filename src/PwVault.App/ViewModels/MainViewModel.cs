@@ -63,6 +63,9 @@ public partial class MainViewModel : ViewModelBase
         AutoLock.LockRequested += (_, _) => Lock();
         BrowserIntegration = browserIntegration ?? (BrowserIntegration.IsSupported ? new BrowserIntegration() : null);
         _bridgePipeName = bridgePipeName;
+        ThemeService.Apply(Settings.Theme, Settings.Accent);
+        if (Avalonia.Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnActualThemeChanged;
 
         CurrentPage = Settings.VaultPath is { } path && File.Exists(path)
             ? new UnlockViewModel(this, path)
@@ -72,6 +75,31 @@ public partial class MainViewModel : ViewModelBase
             ResumeBrowserIntegration();
         RepairAutoStart();
     }
+
+    // ------------------------------------------------------------------ テーマ
+
+    /// <summary>ツールバーの切り替えボタンの表示（押したらなる方）。</summary>
+    public string ThemeToggleText => ThemeService.IsDark ? "☀ ライト" : "🌙 ダーク";
+
+    /// <summary>ツールバーのボタン: ライトとダークを切り替える（OS に合わせていた場合も、いまの逆にする）。</summary>
+    [RelayCommand]
+    private void ToggleTheme() => SetTheme(ThemeService.IsDark ? ThemeMode.Light : ThemeMode.Dark, Settings.Accent);
+
+    public void SetTheme(ThemeMode mode, AccentColor accent)
+    {
+        Settings.Theme = mode;
+        Settings.Accent = accent;
+        SaveSettings();
+        ThemeService.Apply(mode, accent);
+        OnPropertyChanged(nameof(ThemeToggleText));
+        ThemeChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // OS に合わせているときに OS 側でライト / ダークが変わった
+    private void OnActualThemeChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ThemeToggleText));
+
+    /// <summary>テーマが変わった（設定画面の選択表示を合わせる）。</summary>
+    public event EventHandler? ThemeChanged;
 
     // ------------------------------------------------------------------ 保存先（クラウドの同期フォルダ）
 
@@ -389,6 +417,8 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>アプリ終了時の後始末。</summary>
     public void Shutdown()
     {
+        if (Avalonia.Application.Current is { } app)
+            app.ActualThemeVariantChanged -= OnActualThemeChanged;
         StopBridge();
         Lock();
         Clipboard.Dispose();

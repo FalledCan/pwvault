@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:PwVault.App.ViewModels"
+             xmlns:svc="using:PwVault.App.Services"
              x:Class="PwVault.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
     <ScrollViewer>
@@ -62,6 +63,41 @@
             <Border Classes="card">
                 <StackPanel Spacing="10">
                     <TextBlock Classes="h2" Text="表示・操作" />
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="10">
+                        <TextBlock VerticalAlignment="Center" Text="テーマ" />
+                        <ListBox Grid.Column="1" ItemsSource="{Binding ThemeModes}" SelectedItem="{Binding SelectedTheme}"
+                                 Background="Transparent">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:ThemeService+ThemeOption">
+                                    <TextBlock Text="{Binding Label}" Margin="4,0" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Grid.Row="1" VerticalAlignment="Top" Margin="0,10,0,0" Text="色" />
+                        <ListBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Accents}" SelectedItem="{Binding SelectedAccent}"
+                                 Background="Transparent">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:ThemeService+AccentOption">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="{Binding Label}">
+                                        <Ellipse Width="16" Height="16" VerticalAlignment="Center">
+                                            <Ellipse.Fill>
+                                                <SolidColorBrush Color="{Binding Color}" />
+                                            </Ellipse.Fill>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                    <TextBlock Classes="muted" FontSize="12"
+                               Text="一覧の上の「🌙 ダーク / ☀ ライト」ボタンでも切り替えられます。「OS に合わせる」の色は Windows（Mac）のアクセントカラーです。" />
                     <StackPanel>
                         <CheckBox IsChecked="{Binding FetchSiteIcons}" Content="サイトのアイコンを各サイトから取得する" />
                         <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0"

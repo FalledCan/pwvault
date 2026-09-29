@@ -26,6 +26,8 @@ public partial class SettingsViewModel : ViewModelBase
         UpdateKdfCurrent();
         UpdateBrowserStatus();
         UpdateStorage();
+        LoadTheme();
+        owner.Main.ThemeChanged += OnThemeChanged;
         FetchSiteIcons = s.FetchSiteIcons;
         DoubleClickOpensUrl = s.DoubleClickOpensUrl;
         CloseToTray = s.CloseToTray;
@@ -122,6 +124,39 @@ public partial class SettingsViewModel : ViewModelBase
 
     // ---- 表示・操作（切り替えたらすぐ保存する）
     private readonly bool _loaded;
+
+    // テーマ（明るさ・色）。選んだらすぐ反映して保存する
+    public IReadOnlyList<Services.ThemeService.ThemeOption> ThemeModes => Services.ThemeService.Modes;
+    public IReadOnlyList<Services.ThemeService.AccentOption> Accents => Services.ThemeService.Accents;
+    [ObservableProperty] public partial Services.ThemeService.ThemeOption? SelectedTheme { get; set; }
+    [ObservableProperty] public partial Services.ThemeService.AccentOption? SelectedAccent { get; set; }
+
+    private bool _syncingTheme;
+
+    // ツールバーのボタンで切り替えたとき、選択表示を合わせる。設定画面を閉じた後なら購読をやめる
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        if (_owner.SubPage != this) { _owner.Main.ThemeChanged -= OnThemeChanged; return; }
+        LoadTheme();
+    }
+
+    private void LoadTheme()
+    {
+        _syncingTheme = true;
+        SelectedTheme = ThemeModes.First(m => m.Mode == _owner.Main.Settings.Theme);
+        SelectedAccent = Accents.First(a => a.Accent == _owner.Main.Settings.Accent);
+        _syncingTheme = false;
+    }
+
+    partial void OnSelectedThemeChanged(Services.ThemeService.ThemeOption? value)
+    {
+        if (!_syncingTheme && value is not null) _owner.Main.SetTheme(value.Mode, _owner.Main.Settings.Accent);
+    }
+
+    partial void OnSelectedAccentChanged(Services.ThemeService.AccentOption? value)
+    {
+        if (!_syncingTheme && value is not null) _owner.Main.SetTheme(_owner.Main.Settings.Theme, value.Accent);
+    }
 
     [ObservableProperty] public partial bool FetchSiteIcons { get; set; }
     [ObservableProperty] public partial bool DoubleClickOpensUrl { get; set; }

@@ -216,6 +216,7 @@ public sealed class Harness : IDisposable
     public void Dispose()
     {
         Main.Shutdown();
+        ThemeService.Apply(ThemeMode.System, AccentColor.System); // テーマはアプリ全体の状態なので、ほかのテストに持ち越さない
         if (OperatingSystem.IsWindows())
         {
             Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(RegistryBase, throwOnMissingSubKey: false);

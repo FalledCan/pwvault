@@ -38,6 +38,12 @@ public sealed class AppSettings
     /// <summary>Windows Hello でのアンロックを、マスターパスワードなしで続けられる日数。過ぎたらマスターパスワードが必要。</summary>
     public int QuickUnlockDays { get; set; } = 14;
 
+    /// <summary>画面の明るさ（OS に合わせる / ライト / ダーク）。</summary>
+    public ThemeMode Theme { get; set; } = ThemeMode.System;
+
+    /// <summary>ボタンなどの色。</summary>
+    public AccentColor Accent { get; set; } = AccentColor.System;
+
     public static string DefaultVaultPath =>
         Path.Combine(OperatingSystem.IsMacOS()
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents")
@@ -87,6 +93,8 @@ public sealed class AppSettingsStore
         s.BackupGenerations = Math.Clamp(s.BackupGenerations, 0, Core.Storage.AtomicFileStore.MaxBackupGenerations);
         s.Generator ??= new GeneratorOptions();
         s.QuickUnlockDays = Math.Clamp(s.QuickUnlockDays, 1, 90);
+        if (!Enum.IsDefined(s.Theme)) s.Theme = ThemeMode.System;
+        if (!Enum.IsDefined(s.Accent)) s.Accent = AccentColor.System;
         return s;
     }
 }

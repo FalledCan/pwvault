@@ -31,6 +31,8 @@
                         <Button Content="生成" ToolTip.Tip="{x:Static svc:Shortcuts.GenerateTip}" Command="{Binding ShowGeneratorCommand}" />
                         <Button Content="取込/書出" Command="{Binding ShowImportExportCommand}" />
                         <Button Content="ゴミ箱" Command="{Binding ShowTrashCommand}" />
+                        <Button Content="{Binding Main.ThemeToggleText}" ToolTip.Tip="ライト / ダークを切り替える（色は「設定」で選べます）"
+                                Command="{Binding Main.ToggleThemeCommand}" />
                         <Button Content="設定" Command="{Binding ShowSettingsCommand}" />
                         <Button Content="🔒 ロック" ToolTip.Tip="{x:Static svc:Shortcuts.LockTip}" Command="{Binding LockCommand}" />
                     </StackPanel>
