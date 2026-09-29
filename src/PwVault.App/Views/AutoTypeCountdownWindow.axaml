@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PwVault.App.ViewModels"
+        x:Class="PwVault.App.Views.AutoTypeCountdownWindow"
+        x:DataType="vm:AutoTypeCountdownViewModel"
+        Title="PwVault 自動入力"
+        Icon="/Assets/avalonia-logo.ico"
+        SizeToContent="WidthAndHeight" CanResize="False"
+        WindowDecorations="BorderOnly" Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        WindowStartupLocation="Manual"
+        Background="{DynamicResource CardBackground}">
+    <!-- 前面を奪わない小さな通知（奪うと入力先が変わってしまう）。画面の右下に出す -->
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="14,12" MaxWidth="460">
+        <Image Source="/Assets/avalonia-logo.ico" Width="20" Height="20" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+            <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Message}" />
+            <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap" Text="ID 欄にカーソルがあるか確かめてください。ほかの画面に切り替えると中止します。" />
+        </StackPanel>
+        <Button Grid.Column="2" Content="やめる" VerticalAlignment="Center" Command="{Binding CancelCommand}" />
+    </Grid>
+</Window>

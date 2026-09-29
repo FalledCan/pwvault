@@ -97,9 +97,17 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial AutoTypePickerViewModel? AutoTypePicker { get; set; }
 
-    /// <summary>設定に合わせてショートカットキーを登録し直す。登録できなければ理由を返す。</summary>
+    /// <summary>
+    /// 設定に合わせて、ショートカットキーの登録と、前面の画面の見張り（アプリが開いたときの自動入力）をし直す。
+    /// ショートカットキーを登録できなければ理由を返す。
+    /// </summary>
     public string? ApplyAutoTypeSettings()
     {
+        _foregroundWatch?.Dispose();
+        _foregroundWatch = null;
+        if (AutoTypePlatform is not null && Settings.AutoTypeOnOpenEnabled)
+            _foregroundWatch = AutoTypePlatform.WatchForeground(w => Dispatcher.UIThread.Post(() => OnForegroundChanged(w)));
+
         _autoTypeHotKey?.Dispose();
         _autoTypeHotKey = null;
         if (AutoTypePlatform is null || !Settings.AutoTypeEnabled) return null;
@@ -129,6 +137,72 @@ public partial class MainViewModel : ViewModelBase
     }
 
     public void CloseAutoTypePicker() => AutoTypePicker = null;
+
+    // ---- 紐付けたアプリが前に出たときの自動入力
+
+    private IDisposable? _foregroundWatch;
+    private readonly HashSet<IntPtr> _autoTypeHandledWindows = [];
+    private DispatcherTimer? _countdownTimer;
+
+    /// <summary>「数秒後に自動で入力」の待ち（無ければ null）。App が画面の隅に小さな窓を出す。</summary>
+    [ObservableProperty]
+    public partial AutoTypeCountdownViewModel? AutoTypeCountdown { get; set; }
+
+    partial void OnAutoTypeCountdownChanged(AutoTypeCountdownViewModel? value)
+    {
+        _countdownTimer?.Stop();
+        _countdownTimer = null;
+        if (value is null) return;
+        _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _countdownTimer.Tick += async (_, _) =>
+        {
+            if (AutoTypeCountdown is { } c) await c.TickAsync();
+        };
+        _countdownTimer.Start();
+    }
+
+    public void CloseAutoTypeCountdown() => AutoTypeCountdown = null;
+
+    private int OnOpenSeconds => Math.Clamp(Settings.AutoTypeOnOpenSeconds, 1, 15);
+
+    /// <summary>
+    /// 前面の画面が変わった。紐付けたアプリの画面なら、エントリの設定に合わせて選択窓を出すか、数秒後の自動入力を始める。
+    /// 同じ画面については 1 回だけ（閉じても何度も出さない）。アンロック中だけ（紐付けも暗号化されているので、ロック中は分からない）。
+    /// 同じアプリに動きを設定したエントリが複数あるときは、自動では打たずに選択窓を出す。
+    /// </summary>
+    public void OnForegroundChanged(TargetWindow window)
+    {
+        if (AutoTypePlatform is null || !Settings.AutoTypeOnOpenEnabled || window.ProcessId == Environment.ProcessId) return;
+
+        // 待ち・選択窓の途中で、同じアプリの別の画面（起動画面 → ログイン画面など）に移ったら、そちらに付け替える
+        if (AutoTypeCountdown is { } countdown)
+        {
+            if (countdown.Target.ProcessId == window.ProcessId && countdown.Target.Handle != window.Handle && _autoTypeHandledWindows.Add(window.Handle))
+                countdown.Retarget(window, OnOpenSeconds);
+            return;
+        }
+        if (AutoTypePicker is { } picker)
+        {
+            if (picker.OpenedAutomatically && picker.Target.ProcessId == window.ProcessId && picker.Target.Handle != window.Handle)
+            {
+                _autoTypeHandledWindows.Add(window.Handle);
+                picker.Target = window;
+            }
+            return;
+        }
+
+        if (CurrentPage is not VaultViewModel { IsUnlocked: true } vault) return;
+        var linked = Core.Tools.AutoTypeMatcher.Linked(vault.Vault.GetEntries(), window.ProcessName)
+            .Where(e => e.Data.AutoTypeOnOpen != Core.AutoTypeOnOpen.None)
+            .ToList();
+        if (linked.Count == 0 || !_autoTypeHandledWindows.Add(window.Handle)) return;
+
+        AutoLock.NotifyActivity();
+        if (linked is [{ Data.AutoTypeOnOpen: Core.AutoTypeOnOpen.TypeAutomatically } only])
+            AutoTypeCountdown = new AutoTypeCountdownViewModel(this, vault, AutoTypePlatform, window, only, OnOpenSeconds);
+        else
+            AutoTypePicker = new AutoTypePickerViewModel(this, vault, AutoTypePlatform, window) { OpenedAutomatically = true };
+    }
 
     // ------------------------------------------------------------------ チュートリアル
 
@@ -546,6 +620,8 @@ public partial class MainViewModel : ViewModelBase
         {
             Tutorial = null; // 案内は保管庫を開いている前提なので閉じる
             AutoTypePicker = null;
+            AutoTypeCountdown = null;
+            _autoTypeHandledWindows.Clear();
             var path = vault.Close();
             CurrentPage = new UnlockViewModel(this, path);
         }
@@ -558,6 +634,8 @@ public partial class MainViewModel : ViewModelBase
             app.ActualThemeVariantChanged -= OnActualThemeChanged;
         _autoTypeHotKey?.Dispose();
         _autoTypeHotKey = null;
+        _foregroundWatch?.Dispose();
+        _foregroundWatch = null;
         StopBridge();
         Lock();
         Clipboard.Dispose();

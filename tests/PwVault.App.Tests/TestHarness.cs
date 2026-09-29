@@ -127,6 +127,27 @@ public sealed class FakeAutoType : IAutoTypePlatform
         return new Registration(this);
     }
 
+    /// <summary>前面の画面の見張り（登録されていれば知らせ先）。</summary>
+    public Action<TargetWindow>? ForegroundChanged { get; private set; }
+
+    public IDisposable? WatchForeground(Action<TargetWindow> onChanged)
+    {
+        ForegroundChanged = onChanged;
+        return new Watch(this);
+    }
+
+    /// <summary>テスト: この画面が前面に出たことにする。</summary>
+    public void BringToFront(TargetWindow window)
+    {
+        Foreground = window;
+        ForegroundChanged?.Invoke(window);
+    }
+
+    private sealed class Watch(FakeAutoType owner) : IDisposable
+    {
+        public void Dispose() => owner.ForegroundChanged = null;
+    }
+
     private sealed class Registration(FakeAutoType owner) : IDisposable
     {
         public void Dispose()

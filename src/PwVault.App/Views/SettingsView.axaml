@@ -300,6 +300,16 @@
                             </ComboBox>
                         </Grid>
                         <TextBlock TextWrapping="Wrap" Text="{Binding AutoTypeStatus}" />
+                        <Separator />
+                        <StackPanel Spacing="6" IsEnabled="{Binding AutoTypeSupported}">
+                            <CheckBox IsChecked="{Binding AutoTypeOnOpenEnabled}" Content="紐付けたアプリの画面が前に出たら、エントリの設定に合わせて動く" />
+                            <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,0" TextWrapping="Wrap"
+                                       Text="エントリの編集画面の「このアプリが前に出たとき」で、「候補を出す」（Enter で入力）か「数秒後に自動で入力する」を選べます。同じ画面では 1 回だけ動きます。PwVault がアンロック中のときだけ働きます。" />
+                            <Grid ColumnDefinitions="Auto,120" ColumnSpacing="12" Margin="28,4,0,0">
+                                <TextBlock VerticalAlignment="Center" Text="自動で入力するまでの秒数" />
+                                <NumericUpDown Grid.Column="1" Minimum="1" Maximum="15" Increment="1" FormatString="0" Value="{Binding AutoTypeOnOpenSeconds}" />
+                            </Grid>
+                        </StackPanel>
                         <Border Background="{DynamicResource PaneBackground}" CornerRadius="6" Padding="12">
                             <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                                        Text="・間違った画面に入力しないよう、エントリに「使うアプリ」を紐付けます。紐付けていないアプリに入力するときは確認が出ます（その場で紐付けもできます）。紐付けはエントリの編集画面でも変えられます。&#x0a;・打ち込む直前に、前面の画面が入力先のままか確かめ、変わっていたら入力を止めます。&#x0a;・ゲームによっては、自動で打ち込まれた文字を受け付けないことがあります。管理者として動いているアプリには入力できません。" />

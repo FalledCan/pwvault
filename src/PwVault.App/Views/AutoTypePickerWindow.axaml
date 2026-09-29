@@ -20,6 +20,8 @@
                     <TextBlock Classes="h2" Text="自動入力" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding TargetText, StringFormat='入力先: {0}'}" />
+                <TextBlock Classes="success" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding OpenedAutomatically}"
+                           Text="紐付けたアプリが開いたので候補を出しました。ID 欄にカーソルがあることを確かめて Enter で入力します。" />
                 <TextBox x:Name="SearchBox" PlaceholderText="エントリを検索" Text="{Binding SearchText}">
                     <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding ChooseCommand}" />

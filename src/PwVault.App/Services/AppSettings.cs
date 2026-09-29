@@ -44,6 +44,12 @@ public sealed class AppSettings
     /// <summary>自動入力のショートカットキー（<see cref="AutoTypeHotKey.Presets"/> の Id）。</summary>
     public string AutoTypeHotKeyId { get; set; } = "CtrlAltA";
 
+    /// <summary>紐付けたアプリの画面が前に出たとき、エントリの設定（候補を出す・自動で入力する）に合わせて動くか。</summary>
+    public bool AutoTypeOnOpenEnabled { get; set; } = true;
+
+    /// <summary>「自動で入力する」エントリで、アプリが前に出てから入力するまでの秒数（1〜15）。</summary>
+    public int AutoTypeOnOpenSeconds { get; set; } = 3;
+
     /// <summary>チュートリアルを一度見た（または閉じた）か。保管庫を作った直後に自動で出すのは、まだのときだけ。</summary>
     public bool TutorialSeen { get; set; }
 
@@ -102,6 +108,7 @@ public sealed class AppSettingsStore
         s.BackupGenerations = Math.Clamp(s.BackupGenerations, 0, Core.Storage.AtomicFileStore.MaxBackupGenerations);
         s.Generator ??= new GeneratorOptions();
         s.QuickUnlockDays = Math.Clamp(s.QuickUnlockDays, 1, 90);
+        s.AutoTypeOnOpenSeconds = Math.Clamp(s.AutoTypeOnOpenSeconds, 1, 15);
         if (!Enum.IsDefined(s.Theme)) s.Theme = ThemeMode.System;
         if (!Enum.IsDefined(s.Accent)) s.Accent = AccentColor.System;
         return s;

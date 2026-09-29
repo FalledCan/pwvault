@@ -27,6 +27,9 @@ public sealed class EntryData
     /// <summary>自動タイプで打ち込む内容。</summary>
     public AutoTypeMode AutoType { get; set; } = AutoTypeMode.UsernameTabPassword;
 
+    /// <summary>紐付けたアプリの画面が前に出たときの動き（アンロック中だけ）。</summary>
+    public AutoTypeOnOpen AutoTypeOnOpen { get; set; } = AutoTypeOnOpen.ShowPicker;
+
     [JsonIgnore]
     public bool IsTrashed => TrashedAt is not null;
 
@@ -44,7 +47,19 @@ public sealed class EntryData
         TrashedAt = TrashedAt,
         AutoTypeApps = [.. AutoTypeApps],
         AutoType = AutoType,
+        AutoTypeOnOpen = AutoTypeOnOpen,
     };
+}
+
+/// <summary>紐付けたアプリの画面が前に出たときの動き。</summary>
+public enum AutoTypeOnOpen
+{
+    /// <summary>何もしない（ショートカットキーを押したときだけ入力する）。</summary>
+    None,
+    /// <summary>選択窓を出して、このエントリを選んだ状態にする（Enter で入力）。</summary>
+    ShowPicker,
+    /// <summary>数秒待ってから自動で打ち込む（待っている間は「やめる」を出す）。</summary>
+    TypeAutomatically,
 }
 
 /// <summary>自動タイプで打ち込む内容（Enter は押さない）。</summary>

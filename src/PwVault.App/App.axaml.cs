@@ -64,6 +64,20 @@ public partial class App : Application
                 }
             };
 
+            // 紐付けたアプリが開いたときの「数秒後に自動で入力」の通知（前面を奪わない）
+            AutoTypeCountdownWindow? countdown = null;
+            main.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(MainViewModel.AutoTypeCountdown)) return;
+                countdown?.Close();
+                countdown = null;
+                if (main.AutoTypeCountdown is { } vm)
+                {
+                    countdown = new AutoTypeCountdownWindow { DataContext = vm };
+                    countdown.Show();
+                }
+            };
+
             // ブラウザ拡張の「PwVault をアンロックする」から呼ばれたら前に出す
             main.ShowRequested += (_, _) => ShowWindow(window);
 

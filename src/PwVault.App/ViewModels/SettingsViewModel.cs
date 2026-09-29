@@ -90,8 +90,28 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] public partial Services.AutoTypeHotKey? SelectedHotKey { get; set; }
     [ObservableProperty] public partial string? AutoTypeStatus { get; set; }
 
+    [ObservableProperty] public partial bool AutoTypeOnOpenEnabled { get; set; }
+    [ObservableProperty] public partial decimal? AutoTypeOnOpenSeconds { get; set; }
+
+    partial void OnAutoTypeOnOpenEnabledChanged(bool value)
+    {
+        if (!_loaded) return;
+        _owner.Main.Settings.AutoTypeOnOpenEnabled = value;
+        _owner.Main.SaveSettings();
+        _owner.Main.ApplyAutoTypeSettings();
+    }
+
+    partial void OnAutoTypeOnOpenSecondsChanged(decimal? value)
+    {
+        if (!_loaded || value is null) return;
+        _owner.Main.Settings.AutoTypeOnOpenSeconds = (int)Math.Clamp(value.Value, 1, 15);
+        _owner.Main.SaveSettings();
+    }
+
     private void LoadAutoType()
     {
+        AutoTypeOnOpenEnabled = _owner.Main.Settings.AutoTypeOnOpenEnabled;
+        AutoTypeOnOpenSeconds = _owner.Main.Settings.AutoTypeOnOpenSeconds;
         AutoTypeEnabled = _owner.Main.Settings.AutoTypeEnabled;
         SelectedHotKey = Services.AutoTypeHotKey.Find(_owner.Main.Settings.AutoTypeHotKeyId);
         UpdateAutoTypeStatus(null);

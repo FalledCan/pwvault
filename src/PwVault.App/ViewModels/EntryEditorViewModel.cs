@@ -26,7 +26,21 @@ public partial class EntryEditorViewModel : ViewModelBase
         Favorite = _original.Favorite;
         AutoTypeAppsText = string.Join(", ", _original.AutoTypeApps);
         AutoTypePasswordOnly = _original.AutoType == AutoTypeMode.PasswordOnly;
+        SelectedOnOpen = OnOpenOptions.First(o => o.Value == _original.AutoTypeOnOpen);
     }
+
+    public sealed record OnOpenOption(AutoTypeOnOpen Value, string Label);
+
+    /// <summary>紐付けたアプリが前に出たときの動きの選択肢。</summary>
+    public IReadOnlyList<OnOpenOption> OnOpenOptions { get; } =
+    [
+        new(AutoTypeOnOpen.ShowPicker, "候補を出す（Enter で入力）"),
+        new(AutoTypeOnOpen.TypeAutomatically, "数秒後に自動で入力する"),
+        new(AutoTypeOnOpen.None, "何もしない（ショートカットキーのときだけ）"),
+    ];
+
+    [ObservableProperty]
+    public partial OnOpenOption SelectedOnOpen { get; set; }
 
     /// <summary>自動入力の設定欄を出すか（Windows のみ）。</summary>
     public bool AutoTypeSupported => _owner.Main.AutoTypeSupported;
@@ -104,6 +118,7 @@ public partial class EntryEditorViewModel : ViewModelBase
         data.Favorite = Favorite;
         data.AutoTypeApps = AutoTypeMatcher.Parse(AutoTypeAppsText);
         data.AutoType = AutoTypePasswordOnly ? AutoTypeMode.PasswordOnly : AutoTypeMode.UsernameTabPassword;
+        data.AutoTypeOnOpen = SelectedOnOpen.Value;
 
         _owner.CommitEditor(_id, data);
     }

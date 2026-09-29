@@ -35,7 +35,13 @@ public partial class AutoTypePickerViewModel : ViewModelBase
         ApplyFilter();
     }
 
-    public TargetWindow Target { get; }
+    /// <summary>入力先。アプリが開いたときに出した選択窓では、同じアプリの別の画面（起動画面 → ログイン画面など）に付け替える。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TargetText))]
+    public partial TargetWindow Target { get; set; }
+
+    /// <summary>アプリが前に出たことで自動で出した選択窓か（そのときの説明を出す）。</summary>
+    public bool OpenedAutomatically { get; init; }
 
     public string TargetText => Target.Title.Length > 0 ? $"{Target.ProcessName}（{Target.Title}）" : Target.ProcessName;
 
@@ -119,47 +125,23 @@ public partial class AutoTypePickerViewModel : ViewModelBase
         Confirming = null;
         Error = null;
         if (_vault.Vault.GetEntry(id) is not { } entry) return;
-        var actions = AutoTypeMatcher.Sequence(entry.Data);
-        if (actions.Count == 0)
+        if (AutoTypeMatcher.Sequence(entry.Data).Count == 0)
         {
             Error = "このエントリには、入力するユーザー ID・パスワードがありません。";
             return;
         }
 
-        IsTyping = true; // 選択窓を隠して、元の画面を前に戻す
-        await Task.Delay(_main.AutoTypeDelay);
-        if (!_platform.Activate(Target.Handle))
+        IsTyping = true; // 選択窓を隠して、元の画面を前に戻してから打つ
+        var target = Target;
+        if (await AutoTyper.TypeAsync(_platform, target, entry.Data, _main.AutoTypeDelay, activate: true) is { } error)
         {
-            Fail("入力先の画面を前に戻せませんでした。");
-            return;
-        }
-        await Task.Delay(_main.AutoTypeDelay);
-
-        try
-        {
-            foreach (var action in actions)
-            {
-                if (!IsStillTarget())
-                {
-                    Fail("入力先の画面が切り替わったため、入力を止めました。");
-                    return;
-                }
-                if (action is AutoTypeAction.Text t) _platform.TypeText(t.Value);
-                else _platform.PressTab();
-            }
-        }
-        catch (InvalidOperationException ex)
-        {
-            Fail(ex.Message);
+            Fail(error);
             return;
         }
 
-        _vault.Status = $"「{entry.Data.Title}」を {Target.ProcessName} に入力しました。";
+        _vault.Status = $"「{entry.Data.Title}」を {target.ProcessName} に入力しました。";
         _main.CloseAutoTypePicker();
     }
-
-    private bool IsStillTarget() =>
-        _platform.GetForeground() is { } now && now.Handle == Target.Handle && now.ProcessId == Target.ProcessId;
 
     private void Fail(string message)
     {

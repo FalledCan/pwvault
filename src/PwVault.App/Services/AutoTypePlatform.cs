@@ -39,6 +39,9 @@ public interface IAutoTypePlatform
 
     /// <summary>ショートカットキーを登録する。ほかのアプリが使っているなど登録できなければ null。解除は Dispose。</summary>
     IDisposable? RegisterHotKey(AutoTypeHotKey key, Action onPressed);
+
+    /// <summary>前面のウィンドウが変わるたびに知らせる（登録したアプリが開いたときの自動入力のため）。見張れなければ null。</summary>
+    IDisposable? WatchForeground(Action<TargetWindow> onChanged);
 }
 
 public static class AutoTypePlatforms
@@ -51,9 +54,10 @@ public static class AutoTypePlatforms
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 internal sealed partial class WindowsAutoTypePlatform : IAutoTypePlatform
 {
-    public TargetWindow? GetForeground()
+    public TargetWindow? GetForeground() => Describe(GetForegroundWindow());
+
+    private static TargetWindow? Describe(IntPtr handle)
     {
-        var handle = GetForegroundWindow();
         if (handle == IntPtr.Zero) return null;
         GetWindowThreadProcessId(handle, out var pid);
         var title = new StringBuilder(512);
@@ -118,6 +122,63 @@ internal sealed partial class WindowsAutoTypePlatform : IAutoTypePlatform
         var registration = new HotKeyThread(key, onPressed);
         return registration.Start() ? registration : null;
     }
+
+    public IDisposable? WatchForeground(Action<TargetWindow> onChanged)
+    {
+        var watcher = new ForegroundWatcher(onChanged);
+        return watcher.Start() ? watcher : null;
+    }
+
+    /// <summary>前面のウィンドウの切り替わり（EVENT_SYSTEM_FOREGROUND）を、専用のスレッドで受け取る。</summary>
+    private sealed class ForegroundWatcher(Action<TargetWindow> onChanged) : IDisposable
+    {
+        private const uint EventSystemForeground = 0x0003, WinEventOutOfContext = 0x0000;
+        private readonly ManualResetEventSlim _ready = new();
+        private WinEventProc? _proc; // ガベージコレクションで消えないよう持っておく
+        private uint _threadId;
+        private bool _hooked;
+        private Thread? _thread;
+
+        public bool Start()
+        {
+            _thread = new Thread(Run) { IsBackground = true, Name = "PwVault foreground watcher" };
+            _thread.Start();
+            _ready.Wait();
+            return _hooked;
+        }
+
+        private void Run()
+        {
+            _threadId = GetCurrentThreadId();
+            _proc = (_, _, hwnd, idObject, _, _, _) =>
+            {
+                if (idObject == 0 && Describe(hwnd) is { } window) onChanged(window);
+            };
+            var hook = SetWinEventHook(EventSystemForeground, EventSystemForeground, IntPtr.Zero, _proc, 0, 0, WinEventOutOfContext);
+            _hooked = hook != IntPtr.Zero;
+            _ready.Set();
+            if (!_hooked) return;
+            try
+            {
+                while (GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
+            }
+            finally
+            {
+                UnhookWinEvent(hook);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_hooked) PostThreadMessage(_threadId, WmQuit, IntPtr.Zero, IntPtr.Zero);
+            _thread?.Join(TimeSpan.FromSeconds(1));
+        }
+    }
+
+    private delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool UnhookWinEvent(IntPtr hook);
 
     /// <summary>
     /// ショートカットキーを受け取る専用のスレッド。RegisterHotKey にウィンドウを渡さないと、押されたことが

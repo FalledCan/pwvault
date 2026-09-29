@@ -71,6 +71,18 @@
                         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                                    Text="ショートカットキーで自動入力するとき、ここに書いたアプリでは確認なしで入力します。入力するときに「紐付けて入力」を選んでも追加されます。" />
                         <CheckBox Content="パスワードだけを入力する（ID は入力しない）" IsChecked="{Binding AutoTypePasswordOnly}" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,4,0,0">
+                            <TextBlock VerticalAlignment="Center" Text="このアプリが前に出たとき" />
+                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding OnOpenOptions}" SelectedItem="{Binding SelectedOnOpen}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:EntryEditorViewModel+OnOpenOption">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                   Text="「数秒後に自動で入力する」は、画面の隅に残り秒数と「やめる」を出してから、ID 欄にカーソルがある前提で入力します。ランチャーを開いたときにカーソルが ID 欄に来るアプリで使ってください。" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
