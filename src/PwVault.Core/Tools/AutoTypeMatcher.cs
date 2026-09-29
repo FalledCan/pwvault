@@ -39,6 +39,10 @@ public static class AutoTypeMatcher
     public static IReadOnlyList<VaultEntry> Linked(IEnumerable<VaultEntry> entries, string app) =>
         entries.Where(e => !e.Data.IsTrashed && IsLinked(e.Data, app)).ToList();
 
+    /// <summary>アプリが開いたときの自動入力で、この題名の画面には反応しないか（題名に登録した文字を含む）。</summary>
+    public static bool IsIgnoredWindow(EntryData data, string title) =>
+        data.AutoTypeIgnoreTitles.Any(t => t.Trim().Length > 0 && title.Contains(t.Trim(), StringComparison.OrdinalIgnoreCase));
+
     /// <summary>打ち込む手順。Enter は押さない（ログインするかは本人が決める）。空の項目は打たない。</summary>
     public static IReadOnlyList<AutoTypeAction> Sequence(EntryData data)
     {

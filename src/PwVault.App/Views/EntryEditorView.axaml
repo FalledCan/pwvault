@@ -83,6 +83,11 @@
                         </Grid>
                         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                                    Text="「数秒後に自動で入力する」は、画面の隅に残り秒数と「やめる」を出してから、ID 欄にカーソルがある前提で入力します。ランチャーを開いたときにカーソルが ID 欄に来るアプリで使ってください。" />
+                        <TextBlock Classes="label" Margin="0,6,0,0" Text="反応しない画面の名前（1 行に 1 つ。題名にこの文字を含む画面では、開いたときの動きをしない）" />
+                        <TextBox Text="{Binding AutoTypeIgnoreTitlesText}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54"
+                                 PlaceholderText="例: 更新" />
+                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                   Text="更新の画面などで候補が出たときに「この画面では出さない」を押すと、ここに追加されます。「終了しますか？」のような確認の画面には、最初から反応しません。" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

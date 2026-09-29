@@ -3,8 +3,11 @@ using System.Text;
 
 namespace PwVault.App.Services;
 
-/// <summary>ショートカットキーを押したときに前面にあったウィンドウ（入力先）。</summary>
-public sealed record TargetWindow(IntPtr Handle, int ProcessId, string ProcessName, string Title);
+/// <summary>
+/// ショートカットキーを押したときに前面にあったウィンドウ（入力先）。
+/// <paramref name="IsDialog"/> は「終了しますか？」のような確認・補助の画面か（アプリが開いたときの自動入力では反応しない）。
+/// </summary>
+public sealed record TargetWindow(IntPtr Handle, int ProcessId, string ProcessName, string Title, bool IsDialog = false);
 
 /// <summary>自動タイプを呼び出すショートカットキーの候補。</summary>
 public sealed record AutoTypeHotKey(string Id, string Label, uint Modifiers, uint VirtualKey)
@@ -62,8 +65,30 @@ internal sealed partial class WindowsAutoTypePlatform : IAutoTypePlatform
         GetWindowThreadProcessId(handle, out var pid);
         var title = new StringBuilder(512);
         GetWindowText(handle, title, title.Capacity);
-        return new TargetWindow(handle, (int)pid, ProcessImageName((int)pid), title.ToString());
+        return new TargetWindow(handle, (int)pid, ProcessImageName((int)pid), title.ToString(), IsDialogLike(handle));
     }
+
+    /// <summary>
+    /// 「終了しますか？」のような確認・補助の画面か。ほかの画面に付属する（オーナーがある）、標準のダイアログ（#32770）、
+    /// ツールウィンドウのどれか。アプリが開いたときの自動入力では、これらには反応しない。
+    /// </summary>
+    private static bool IsDialogLike(IntPtr handle)
+    {
+        if (GetWindow(handle, GwOwner) != IntPtr.Zero) return true;
+        var className = new StringBuilder(64);
+        GetClassName(handle, className, className.Capacity);
+        if (className.ToString() == "#32770") return true;
+        var exStyle = (long)GetWindowLongPtr(handle, GwlExStyle);
+        return (exStyle & (WsExToolWindow | WsExDlgModalFrame)) != 0;
+    }
+
+    private const uint GwOwner = 4;
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x80, WsExDlgModalFrame = 0x1;
+
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
 
     /// <summary>実行ファイル名。管理者として動いているアプリでも読めるよう、情報を限定した開き方で読む。</summary>
     private static string ProcessImageName(int pid)

@@ -30,6 +30,12 @@ public sealed class EntryData
     /// <summary>紐付けたアプリの画面が前に出たときの動き（アンロック中だけ）。</summary>
     public AutoTypeOnOpen AutoTypeOnOpen { get; set; } = AutoTypeOnOpen.ShowPicker;
 
+    /// <summary>
+    /// アプリが開いたときの自動入力で反応しない画面の名前（題名にこの文字を含む画面。更新の画面など）。
+    /// 候補・通知の「この画面では出さない」で追加される。
+    /// </summary>
+    public List<string> AutoTypeIgnoreTitles { get; set; } = [];
+
     [JsonIgnore]
     public bool IsTrashed => TrashedAt is not null;
 
@@ -48,6 +54,7 @@ public sealed class EntryData
         AutoTypeApps = [.. AutoTypeApps],
         AutoType = AutoType,
         AutoTypeOnOpen = AutoTypeOnOpen,
+        AutoTypeIgnoreTitles = [.. AutoTypeIgnoreTitles],
     };
 }
 

@@ -27,7 +27,12 @@ public partial class EntryEditorViewModel : ViewModelBase
         AutoTypeAppsText = string.Join(", ", _original.AutoTypeApps);
         AutoTypePasswordOnly = _original.AutoType == AutoTypeMode.PasswordOnly;
         SelectedOnOpen = OnOpenOptions.First(o => o.Value == _original.AutoTypeOnOpen);
+        AutoTypeIgnoreTitlesText = string.Join(Environment.NewLine, _original.AutoTypeIgnoreTitles);
     }
+
+    /// <summary>アプリが開いたときに反応しない画面の名前（1 行に 1 つ。題名にこの文字を含む画面）。</summary>
+    [ObservableProperty]
+    public partial string AutoTypeIgnoreTitlesText { get; set; }
 
     public sealed record OnOpenOption(AutoTypeOnOpen Value, string Label);
 
@@ -119,6 +124,8 @@ public partial class EntryEditorViewModel : ViewModelBase
         data.AutoTypeApps = AutoTypeMatcher.Parse(AutoTypeAppsText);
         data.AutoType = AutoTypePasswordOnly ? AutoTypeMode.PasswordOnly : AutoTypeMode.UsernameTabPassword;
         data.AutoTypeOnOpen = SelectedOnOpen.Value;
+        data.AutoTypeIgnoreTitles = AutoTypeIgnoreTitlesText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         _owner.CommitEditor(_id, data);
     }

@@ -16,6 +16,9 @@
             <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Message}" />
             <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap" Text="ID 欄にカーソルがあるか確かめてください。ほかの画面に切り替えると中止します。" />
         </StackPanel>
-        <Button Grid.Column="2" Content="やめる" VerticalAlignment="Center" Command="{Binding CancelCommand}" />
+        <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Center">
+            <Button Content="やめる" HorizontalAlignment="Stretch" Command="{Binding CancelCommand}" />
+            <Button Content="この画面では出さない" FontSize="11" IsVisible="{Binding CanIgnoreThisWindow}" Command="{Binding IgnoreThisWindowCommand}" />
+        </StackPanel>
     </Grid>
 </Window>

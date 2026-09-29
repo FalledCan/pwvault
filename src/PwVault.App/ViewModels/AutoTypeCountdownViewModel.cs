@@ -68,6 +68,16 @@ public partial class AutoTypeCountdownViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => Stop("自動入力をやめました。");
 
+    public bool CanIgnoreThisWindow => Target.Title.Trim().Length > 0;
+
+    /// <summary>「この画面では出さない」。この題名の画面では次から自動入力しない。</summary>
+    [RelayCommand]
+    private void IgnoreThisWindow()
+    {
+        _vault.IgnoreAutoTypeWindow(Target.ProcessName, Target.Title);
+        Stop($"「{Target.Title}」の画面では、次から自動入力しません（エントリの編集画面で戻せます）。");
+    }
+
     private void Stop(string? status)
     {
         if (status is not null) _vault.Status = status;

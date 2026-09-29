@@ -41,7 +41,7 @@ public partial class AutoTypePickerViewModel : ViewModelBase
 
     /// <summary>入力先。アプリが開いたときに出した選択窓では、同じアプリの別の画面（起動画面 → ログイン画面など）に付け替える。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TargetText))]
+    [NotifyPropertyChangedFor(nameof(TargetText), nameof(CanIgnoreThisWindow))]
     public partial TargetWindow Target { get; set; }
 
     /// <summary>アプリが前に出たことで自動で出した選択窓か（そのときの説明を出す）。</summary>
@@ -145,6 +145,17 @@ public partial class AutoTypePickerViewModel : ViewModelBase
 
     [RelayCommand]
     private void Cancel() => _main.CloseAutoTypePicker();
+
+    /// <summary>自動で出た候補で「この画面では出さない」。この題名の画面では次から出さない。</summary>
+    [RelayCommand]
+    private void IgnoreThisWindow()
+    {
+        _vault.IgnoreAutoTypeWindow(Target.ProcessName, Target.Title);
+        _vault.Status = $"「{Target.Title}」の画面では、次から候補を出しません（エントリの編集画面で戻せます）。";
+        _main.CloseAutoTypePicker();
+    }
+
+    public bool CanIgnoreThisWindow => OpenedAutomatically && Target.Title.Trim().Length > 0;
 
     /// <summary>元の画面に戻して打ち込む。戻せない・途中で前面が変わったら打たない（打ちかけでも止める）。</summary>
     private async Task TypeAsync(Guid id)

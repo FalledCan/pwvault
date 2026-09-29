@@ -457,6 +457,24 @@ public partial class VaultViewModel : ViewModelBase
 
     public void CancelEditor() => Editor = null;
 
+    /// <summary>
+    /// そのアプリに紐付けて動きを設定したエントリすべてに、「この題名の画面では出さない」を足して保存する
+    /// （候補・通知の「この画面では出さない」から。更新の画面などに反応しないように）。
+    /// </summary>
+    public void IgnoreAutoTypeWindow(string app, string title)
+    {
+        if (title.Trim().Length == 0) return;
+        foreach (var entry in Core.Tools.AutoTypeMatcher.Linked(Vault.GetEntries(), app))
+        {
+            if (entry.Data.AutoTypeOnOpen == AutoTypeOnOpen.None || Core.Tools.AutoTypeMatcher.IsIgnoredWindow(entry.Data, title)) continue;
+            var data = entry.Data.Clone();
+            data.AutoTypeIgnoreTitles.Add(title.Trim());
+            Vault.UpdateEntry(entry.Id, data);
+        }
+        Persist();
+        Refresh();
+    }
+
     /// <summary>自動タイプの入力先アプリをエントリに紐付けて保存する（選択窓の「紐付けて入力」から）。</summary>
     public void LinkAutoTypeApp(Guid id, string app)
     {

@@ -41,6 +41,8 @@
                     <TextBlock Classes="muted" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"
                                Text="ID → Tab → パスワードの順に入力します（Enter は押しません）" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="この画面では出さない" IsVisible="{Binding CanIgnoreThisWindow}" Command="{Binding IgnoreThisWindowCommand}"
+                                ToolTip.Tip="更新の画面など、ログイン画面ではない画面で候補が出たときに押すと、次からこの画面では出しません" />
                         <Button Content="キャンセル" Command="{Binding CancelCommand}" />
                         <Button Classes="accent" Content="入力" Command="{Binding ChooseCommand}" />
                     </StackPanel>

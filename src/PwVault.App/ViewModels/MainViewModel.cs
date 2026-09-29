@@ -184,17 +184,26 @@ public partial class MainViewModel : ViewModelBase
     public void OnForegroundChanged(TargetWindow window)
     {
         if (AutoTypePlatform is null || !Settings.AutoTypeOnOpenEnabled || window.ProcessId == Environment.ProcessId) return;
+        // 「終了しますか？」のような確認・補助の画面には反応しない（付け替えもしない）
+        if (window.IsDialog) return;
+        if (CurrentPage is not VaultViewModel { IsUnlocked: true } vault) return;
+
+        // この画面に反応するエントリ（動きを設定していて、「この画面では出さない」に入っていないもの）
+        var linked = Core.Tools.AutoTypeMatcher.Linked(vault.Vault.GetEntries(), window.ProcessName)
+            .Where(e => e.Data.AutoTypeOnOpen != Core.AutoTypeOnOpen.None && !Core.Tools.AutoTypeMatcher.IsIgnoredWindow(e.Data, window.Title))
+            .ToList();
 
         // 待ち・選択窓の途中で、同じアプリの別の画面（起動画面 → ログイン画面など）に移ったら、そちらに付け替える
         if (AutoTypeCountdown is { } countdown)
         {
-            if (countdown.Target.ProcessId == window.ProcessId && countdown.Target.Handle != window.Handle && _autoTypeHandledWindows.Add(window.Handle))
+            if (countdown.Target.ProcessId == window.ProcessId && countdown.Target.Handle != window.Handle
+                && linked.Any(e => e.Id == countdown.EntryId) && _autoTypeHandledWindows.Add(window.Handle))
                 countdown.Retarget(window, OnOpenSeconds);
             return;
         }
         if (AutoTypePicker is { } picker)
         {
-            if (picker.OpenedAutomatically && picker.Target.ProcessId == window.ProcessId && picker.Target.Handle != window.Handle)
+            if (picker.OpenedAutomatically && picker.Target.ProcessId == window.ProcessId && picker.Target.Handle != window.Handle && linked.Count > 0)
             {
                 _autoTypeHandledWindows.Add(window.Handle);
                 picker.Target = window;
@@ -202,10 +211,6 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (CurrentPage is not VaultViewModel { IsUnlocked: true } vault) return;
-        var linked = Core.Tools.AutoTypeMatcher.Linked(vault.Vault.GetEntries(), window.ProcessName)
-            .Where(e => e.Data.AutoTypeOnOpen != Core.AutoTypeOnOpen.None)
-            .ToList();
         if (linked.Count == 0 || !_autoTypeHandledWindows.Add(window.Handle)) return;
 
         AutoLock.NotifyActivity();

@@ -33,6 +33,16 @@ public class AutoTypeMatcherTests
     }
 
     [Fact]
+    public void IgnoredWindow_MatchesTitleContainingText()
+    {
+        var data = new EntryData { AutoTypeIgnoreTitles = ["アップデート", " ", "patch"] };
+        Assert.True(AutoTypeMatcher.IsIgnoredWindow(data, "FINAL FANTASY XIV アップデート"));
+        Assert.True(AutoTypeMatcher.IsIgnoredWindow(data, "Patch notes"));
+        Assert.False(AutoTypeMatcher.IsIgnoredWindow(data, "FINAL FANTASY XIV")); // 空白だけの項目には反応しない
+        Assert.False(AutoTypeMatcher.IsIgnoredWindow(new EntryData(), "anything"));
+    }
+
+    [Fact]
     public void Sequence_TypesIdTabPassword_OrPasswordOnly_NeverEnter()
     {
         var data = new EntryData { Username = "taro", Password = "pw" };
