@@ -5,7 +5,7 @@
         x:DataType="vm:AutoTypePickerViewModel"
         Title="PwVault 自動入力"
         Icon="/Assets/avalonia-logo.ico"
-        Width="480" Height="460" CanResize="False"
+        Width="480" Height="500" CanResize="False"
         WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="False"
         Background="{DynamicResource PaneBackground}">
     <Window.KeyBindings>
@@ -28,6 +28,7 @@
                 <TextBox x:Name="SearchBox" PlaceholderText="エントリを検索" Text="{Binding SearchText}">
                     <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding ChooseCommand}" />
+                        <KeyBinding Gesture="Shift+Enter" Command="{Binding ChooseTotpCommand}" />
                         <KeyBinding Gesture="Down" Command="{Binding MoveSelectionCommand}" CommandParameter="1" />
                         <KeyBinding Gesture="Up" Command="{Binding MoveSelectionCommand}" CommandParameter="-1" />
                     </TextBox.KeyBindings>
@@ -37,16 +38,18 @@
             <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
                 <TextBlock Classes="error" TextWrapping="Wrap" Text="{Binding Error}"
                            IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Classes="muted" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"
-                               Text="ID → Tab → パスワードの順に入力します（Enter は押しません）" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                        <Button Content="この画面では出さない" IsVisible="{Binding CanIgnoreThisWindow}" Command="{Binding IgnoreThisWindowCommand}"
-                                ToolTip.Tip="更新の画面など、ログイン画面ではない画面で候補が出たときに押すと、次からこの画面では出しません" />
-                        <Button Content="キャンセル" Command="{Binding CancelCommand}" />
-                        <Button Classes="accent" Content="入力" Command="{Binding ChooseCommand}" />
-                    </StackPanel>
-                </Grid>
+                <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                           Text="ID → Tab → パスワードの順に入力します（Enter は押しません）" />
+                <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding CanTypeTotp}"
+                           Text="Shift + Enter でワンタイムパスワードだけを入力します（2 段階認証の欄にカーソルを置いてから）" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button Content="この画面では出さない" IsVisible="{Binding CanIgnoreThisWindow}" Command="{Binding IgnoreThisWindowCommand}"
+                            ToolTip.Tip="更新の画面など、ログイン画面ではない画面で候補が出たときに押すと、次からこの画面では出しません" />
+                    <Button Content="キャンセル" Command="{Binding CancelCommand}" />
+                    <Button Content="🔢 ワンタイムだけ" IsVisible="{Binding CanTypeTotp}" Command="{Binding ChooseTotpCommand}"
+                            ToolTip.Tip="ワンタイムパスワード（2 段階認証の番号）だけを入力します（Shift + Enter）" />
+                    <Button Classes="accent" Content="入力" Command="{Binding ChooseCommand}" />
+                </StackPanel>
             </StackPanel>
 
             <Border Classes="card" Padding="4" Margin="0,10,0,0">
@@ -69,10 +72,14 @@
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Classes="muted" FontSize="12" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <Border Grid.Column="2" IsVisible="{Binding IsLinked}" Background="{DynamicResource SystemAccentColor}"
-                                            CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                        <TextBlock Text="このアプリ用" FontSize="11" Foreground="White" />
-                                    </Border>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="🔢" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding HasTotp}"
+                                                   ToolTip.Tip="ワンタイムパスワードあり" />
+                                        <Border IsVisible="{Binding IsLinked}" Background="{DynamicResource SystemAccentColor}"
+                                                CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                            <TextBlock Text="このアプリ用" FontSize="11" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

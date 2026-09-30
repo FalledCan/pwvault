@@ -77,4 +77,10 @@ public static class AutoTypeMatcher
         }
         return actions;
     }
+
+    /// <summary>ワンタイムパスワードだけを打つ手順（2 段階認証の欄だけ埋めたいとき）。設定していなければ空。</summary>
+    public static IReadOnlyList<AutoTypeAction> TotpOnlySequence(EntryData data, DateTimeOffset? now = null) =>
+        Otp.TotpKey.FromStored(data.Totp) is { } totp
+            ? [new AutoTypeAction.Text(totp.Generate(now ?? DateTimeOffset.UtcNow))]
+            : [];
 }

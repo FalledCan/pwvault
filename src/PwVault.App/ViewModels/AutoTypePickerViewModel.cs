@@ -17,6 +17,9 @@ public sealed record AutoTypeItem(VaultEntry Entry, bool IsLinked, int? Number =
     public string NumberText => Number?.ToString() ?? "";
     public string Title => Entry.Data.Title.Length > 0 ? Entry.Data.Title : "（無題）";
     public string Subtitle => Entry.Data.Username.Length > 0 ? Entry.Data.Username : Entry.Data.Url;
+
+    /// <summary>ワンタイムパスワードを設定しているか（「ワンタイムだけ」で入力できる）。</summary>
+    public bool HasTotp => Entry.Data.HasTotp;
 }
 
 /// <summary>
@@ -52,7 +55,12 @@ public partial class AutoTypePickerViewModel : ViewModelBase
     public ObservableCollection<AutoTypeItem> Items { get; } = [];
 
     [ObservableProperty] public partial string SearchText { get; set; } = "";
-    [ObservableProperty] public partial AutoTypeItem? SelectedItem { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanTypeTotp))]
+    public partial AutoTypeItem? SelectedItem { get; set; }
+
+    /// <summary>選んでいるエントリにワンタイムパスワードがあるか（「ワンタイムだけ」ボタンを出す）。</summary>
+    public bool CanTypeTotp => SelectedItem?.HasTotp == true;
     [ObservableProperty] public partial string? Error { get; set; }
 
     /// <summary>紐付けていないエントリを選んだときの確認中か。</summary>
@@ -63,8 +71,13 @@ public partial class AutoTypePickerViewModel : ViewModelBase
     /// <summary>打ち込み中（選択窓は隠す）。</summary>
     [ObservableProperty] public partial bool IsTyping { get; set; }
 
+    /// <summary>確認中の入力が、ワンタイムパスワードだけか。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConfirmText))]
+    public partial bool ConfirmingTotpOnly { get; set; }
+
     public string ConfirmText => Confirming is null ? "" :
-        $"「{Confirming.Title}」を「{Target.ProcessName}」に入力します。\nこのアプリに紐付けると、次からは確認なしで候補の先頭に出ます。";
+        $"「{Confirming.Title}」{(ConfirmingTotpOnly ? "のワンタイムパスワード" : "")}を「{Target.ProcessName}」に入力します。\nこのアプリに紐付けると、次からは確認なしで候補の先頭に出ます。";
 
     public bool HasLinked => Items.Any(i => i.IsLinked);
 
@@ -108,16 +121,31 @@ public partial class AutoTypePickerViewModel : ViewModelBase
 
     /// <summary>選んだエントリを入力する（Enter・ダブルクリック・「入力」）。紐付けていなければ確認を出す。</summary>
     [RelayCommand]
-    private Task ChooseAsync(AutoTypeItem? item)
+    private Task ChooseAsync(AutoTypeItem? item) => Choose(item, totpOnly: false);
+
+    /// <summary>
+    /// 選んだエントリのワンタイムパスワードだけを入力する（Shift+Enter・「ワンタイムだけ」）。
+    /// ID・パスワードはランチャーが覚えていて、2 段階認証の欄だけ埋めたいとき。紐付けていなければ同じく確認を出す。
+    /// </summary>
+    [RelayCommand]
+    private Task ChooseTotpAsync(AutoTypeItem? item) => Choose(item, totpOnly: true);
+
+    private Task Choose(AutoTypeItem? item, bool totpOnly)
     {
         item ??= SelectedItem;
         if (item is null) return Task.CompletedTask;
+        if (totpOnly && !item.HasTotp)
+        {
+            Error = "このエントリには、ワンタイムパスワードが設定されていません。";
+            return Task.CompletedTask;
+        }
         if (!item.IsLinked)
         {
+            ConfirmingTotpOnly = totpOnly;
             Confirming = item;
             return Task.CompletedTask;
         }
-        return TypeAsync(item.Id);
+        return TypeAsync(item.Id, totpOnly);
     }
 
     [RelayCommand]
@@ -125,11 +153,11 @@ public partial class AutoTypePickerViewModel : ViewModelBase
     {
         if (Confirming is not { } item) return Task.CompletedTask;
         _vault.LinkAutoTypeApp(item.Id, Target.ProcessName);
-        return TypeAsync(item.Id);
+        return TypeAsync(item.Id, ConfirmingTotpOnly);
     }
 
     [RelayCommand]
-    private Task TypeOnceAsync() => Confirming is { } item ? TypeAsync(item.Id) : Task.CompletedTask;
+    private Task TypeOnceAsync() => Confirming is { } item ? TypeAsync(item.Id, ConfirmingTotpOnly) : Task.CompletedTask;
 
     [RelayCommand]
     private void CancelConfirm() => Confirming = null;
@@ -158,26 +186,26 @@ public partial class AutoTypePickerViewModel : ViewModelBase
     public bool CanIgnoreThisWindow => OpenedAutomatically && Target.Title.Trim().Length > 0;
 
     /// <summary>元の画面に戻して打ち込む。戻せない・途中で前面が変わったら打たない（打ちかけでも止める）。</summary>
-    private async Task TypeAsync(Guid id)
+    private async Task TypeAsync(Guid id, bool totpOnly = false)
     {
         Confirming = null;
         Error = null;
         if (_vault.Vault.GetEntry(id) is not { } entry) return;
-        if (AutoTypeMatcher.Sequence(entry.Data).Count == 0)
+        if ((totpOnly ? AutoTypeMatcher.TotpOnlySequence(entry.Data) : AutoTypeMatcher.Sequence(entry.Data)).Count == 0)
         {
-            Error = "このエントリには、入力するユーザー ID・パスワードがありません。";
+            Error = totpOnly ? "このエントリには、ワンタイムパスワードが設定されていません。" : "このエントリには、入力するユーザー ID・パスワードがありません。";
             return;
         }
 
         IsTyping = true; // 選択窓を隠して、元の画面を前に戻してから打つ
         var target = Target;
-        if (await AutoTyper.TypeAsync(_platform, target, entry.Data, _main.AutoTypeDelay, activate: true, _main.Clock) is { } error)
+        if (await AutoTyper.TypeAsync(_platform, target, entry.Data, _main.AutoTypeDelay, activate: true, _main.Clock, totpOnly) is { } error)
         {
             Fail(error);
             return;
         }
 
-        _vault.Status = $"「{entry.Data.Title}」を {target.ProcessName} に入力しました。";
+        _vault.Status = $"「{entry.Data.Title}」{(totpOnly ? "のワンタイムパスワード" : "")}を {target.ProcessName} に入力しました。";
         _main.RememberAutoTypeEntry(target.ProcessName, id);
         _main.CloseAutoTypePicker();
     }

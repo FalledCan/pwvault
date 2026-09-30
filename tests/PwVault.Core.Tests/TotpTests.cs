@@ -319,6 +319,10 @@ public class TotpTests
         // ID はあるがパスワードが空: ID の後の Tab だけで番号の欄に進む（Tab を 2 回押して欄を飛ばさない）
         Assert.Equal([new AutoTypeAction.Text("alice"), new AutoTypeAction.Tab(), new AutoTypeAction.Text("081804")],
             AutoTypeMatcher.Sequence(new EntryData { Username = "alice", Totp = SampleUri, AutoTypeTotp = true }, now));
+
+        // ワンタイムパスワードだけ（2 段階認証の欄だけ埋める）
+        Assert.Equal([new AutoTypeAction.Text("081804")], AutoTypeMatcher.TotpOnlySequence(data, now));
+        Assert.Empty(AutoTypeMatcher.TotpOnlySequence(new EntryData { Username = "alice", Password = "pw" }, now));
     }
 
     [Fact]

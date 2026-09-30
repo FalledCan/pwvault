@@ -1,5 +1,6 @@
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using PwVault.App.Services;
 using PwVault.App.ViewModels;
 using PwVault.Core;
@@ -187,6 +188,68 @@ public class AutoTypeTests
 #pragma warning restore CS0618
     }
 
+
+    [AvaloniaFact]
+    public async Task TotpOnly_TypesJustTheCode_ByButtonAndShiftEnter()
+    {
+        using var h = new Harness();
+        var game = Ff14();
+        game.Totp = new Core.Otp.TotpKey(System.Text.Encoding.ASCII.GetBytes("12345678901234567890"), issuer: "FF14", account: "hikari").ToUri();
+        var vm = await Unlock(h, Bank(), game);
+        Enable(h);
+        string Code() => new Core.Otp.TotpKey(System.Text.Encoding.ASCII.GetBytes("12345678901234567890")).Generate(h.Main.Clock.GetUtcNow());
+
+        // ボタン（「ワンタイムだけ」）: ID・パスワードは打たず、番号だけ
+        var picker = PressHotKeyOn(h, Game);
+        Assert.True(picker.Items[0].HasTotp);
+        Assert.True(picker.CanTypeTotp);
+        await picker.ChooseTotpCommand.ExecuteAsync(null);
+        Assert.Equal([Code()], h.AutoType.Typed);
+        Assert.Null(h.Main.AutoTypePicker);
+        Assert.Contains("ワンタイムパスワードを ffxivboot.exe に入力しました", vm.Status);
+
+        // 選択窓で Shift + Enter
+        h.AutoType.Typed.Clear();
+        picker = PressHotKeyOn(h, Game);
+        var window = new Views.AutoTypePickerWindow { DataContext = picker };
+        window.Show();
+        Harness.Pump();
+        SaveWindow(window, "36-autotype-picker-totp");
+        window.GetVisualDescendants().OfType<Avalonia.Controls.TextBox>().First().Focus();
+        window.KeyPress(Avalonia.Input.Key.Enter, Avalonia.Input.RawInputModifiers.Shift, Avalonia.Input.PhysicalKey.Enter, null);
+        await Harness.WaitFor(() => h.Main.AutoTypePicker is null);
+        Assert.Equal([Code()], h.AutoType.Typed);
+        window.ClosingFromViewModel = true;
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task TotpOnly_UnlinkedAsksFirst_AndWithoutKeyExplains()
+    {
+        using var h = new Harness();
+        var game = Ff14(linked: false);
+        game.Totp = new Core.Otp.TotpKey(System.Text.Encoding.ASCII.GetBytes("12345678901234567890")).ToUri();
+        await Unlock(h, Bank(), game);
+        Enable(h);
+
+        var picker = PressHotKeyOn(h, Game);
+        // ワンタイムパスワードの無いエントリ: ボタンは出さず、Shift + Enter でも打たずに理由を出す
+        picker.SelectedItem = picker.Items.Single(i => i.Title == "銀行");
+        Assert.False(picker.CanTypeTotp);
+        await picker.ChooseTotpCommand.ExecuteAsync(null);
+        Assert.Contains("設定されていません", picker.Error);
+        Assert.Null(picker.Confirming);
+
+        // 紐付けていないエントリは、番号だけでも確認してから
+        picker.SelectedItem = picker.Items.Single(i => i.Title == "FF14");
+        await picker.ChooseTotpCommand.ExecuteAsync(null);
+        Assert.NotNull(picker.Confirming);
+        Assert.Contains("ワンタイムパスワードを「ffxivboot.exe」", picker.ConfirmText);
+        Assert.Empty(h.AutoType.Typed);
+        await picker.TypeOnceCommand.ExecuteAsync(null);
+        Assert.Single(h.AutoType.Typed);
+        Assert.Matches("^[0-9]{6}$", h.AutoType.Typed[0]);
+    }
     [AvaloniaFact]
     public async Task UnlinkedEntry_AsksFirst_AndCanLinkIt()
     {

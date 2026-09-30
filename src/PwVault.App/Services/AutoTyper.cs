@@ -11,12 +11,16 @@ public static class AutoTyper
 {
     /// <param name="activate">先に入力先を前面に戻すか（選択窓から入力するときは true）。</param>
     /// <param name="clock">ワンタイムパスワードを打つときの時刻。</param>
+    /// <param name="totpOnly">ワンタイムパスワードだけを打つ（2 段階認証の欄だけ埋めるとき）。</param>
     /// <returns>打てなかったときの理由。打てたら null。</returns>
     public static async Task<string?> TypeAsync(IAutoTypePlatform platform, TargetWindow target, EntryData data, TimeSpan delay, bool activate,
-        TimeProvider clock)
+        TimeProvider clock, bool totpOnly = false)
     {
-        if (AutoTypeMatcher.Sequence(data, clock.GetUtcNow()).Count == 0)
-            return "このエントリには、入力するユーザー ID・パスワードがありません。";
+        IReadOnlyList<AutoTypeAction> Plan(DateTimeOffset now) =>
+            totpOnly ? AutoTypeMatcher.TotpOnlySequence(data, now) : AutoTypeMatcher.Sequence(data, now);
+
+        if (Plan(clock.GetUtcNow()).Count == 0)
+            return totpOnly ? "このエントリには、ワンタイムパスワードが設定されていません。" : "このエントリには、入力するユーザー ID・パスワードがありません。";
 
         if (activate)
         {
@@ -27,7 +31,7 @@ public static class AutoTyper
         }
 
         // ワンタイムパスワードは打つ直前の時刻で作る
-        var actions = AutoTypeMatcher.Sequence(data, clock.GetUtcNow());
+        var actions = Plan(clock.GetUtcNow());
 
         try
         {
