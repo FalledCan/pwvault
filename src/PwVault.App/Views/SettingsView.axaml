@@ -234,6 +234,22 @@
                                    IsVisible="{Binding StorageStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Border>
+
+                <!-- マスターパスワードが変わる前に退避した変更（自動では取り込めないもの） -->
+                <Border Classes="card" IsVisible="{Binding HasRescueFiles}">
+                    <StackPanel Spacing="12">
+                        <TextBlock Classes="h2" Text="前のマスターパスワードで保存された変更" />
+                        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                                   Text="この PC で「保存できなかった変更」として退避したファイルが、マスターパスワードの変更（保管庫の鍵の作り直し）の前のものだったため、自動では取り込めませんでした。退避したとき（変更する前）のマスターパスワードを入れると取り込めます。" />
+                        <SelectableTextBlock FontSize="12" TextWrapping="Wrap" Text="{Binding RescueFilesText}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Width="280" PasswordChar="●" PlaceholderText="変更する前のマスターパスワード" Text="{Binding RescuePassword}" />
+                            <Button Classes="accent" Content="取り込む" Command="{Binding ImportRescuesCommand}" />
+                        </StackPanel>
+                        <TextBlock TextWrapping="Wrap" Text="{Binding RescueStatus}"
+                                   IsVisible="{Binding RescueStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- ブラウザ連携 -->

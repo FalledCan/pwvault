@@ -287,6 +287,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>この端末だけに置くデータ（クイックアンロックの登録など）の場所。</summary>
     public string LocalDataDir { get; }
 
+    /// <summary>この PC が作った「保存できなかった変更」の退避ファイルの記録（前のマスターパスワードでの取り込み用）。</summary>
+    public RescueLog Rescues => new(LocalDataDir);
+
     public TimeProvider Clock { get; }
 
     /// <summary>OS の確認画面の親にするウィンドウ。</summary>

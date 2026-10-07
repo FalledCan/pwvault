@@ -282,6 +282,9 @@ public sealed class Vault : IDisposable
         _diskHash = SHA256.HashData(bytes);
         _diskHeader = _header;
         IsDirty = false;
+        // ファイルも新しい鍵になったので、古い鍵はもう要らない
+        _previousKey?.Dispose();
+        _previousKey = null;
     }
 
     /// <summary>
@@ -454,19 +457,57 @@ public sealed class Vault : IDisposable
             throw new VaultException(VaultErrorKind.HeaderChanged,
                 "ほかの端末でマスターパスワード（または鍵の設定）が変更されています。");
 
-        var incoming = doc.Entries.Select(r => (Record: r, Data: DecryptEntry(doc.Header, _vaultKey!, r))).ToList();
+        // 鍵を作り直してまだ保存していない間は、ファイル側（前のヘッダ）のエントリは古い鍵で読み、取り込むときに新しい鍵で暗号化し直す
+        var oldKey = _previousKey is not null && !SameHeader(doc.Header, _header) && SameHeader(doc.Header, _diskHeader);
+        return MergeEntries(doc.Header, oldKey ? _previousKey! : _vaultKey!, doc.Entries, reseal: oldKey);
+    }
+
+    /// <summary>
+    /// 別の鍵（前のマスターパスワード）で暗号化された「保存できなかった変更」のコピーを、そのときのマスターパスワードで開いて取り込む。
+    /// エントリは今の保管庫鍵で暗号化し直す。取り込むのはエントリだけで、コピーのヘッダ（パスワード）は使わない。
+    /// 呼び出し側は、この PC が自分で作ったコピーかを確かめてから使うこと（置かれたファイルに古いパスワードを入れさせない）。
+    /// </summary>
+    /// <returns>内容が変わったか。</returns>
+    public bool MergeCopyWithPassword(string path, string password)
+    {
+        EnsureUnlocked();
+        VaultDocument doc;
+        try { doc = VaultFileCodec.Deserialize(ReadVaultFile(path)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new VaultException(VaultErrorKind.Io, "ファイルを読み込めませんでした。", ex);
+        }
+        if (doc.Header.VaultId != _header.VaultId)
+            throw new VaultException(VaultErrorKind.DifferentVault, "別の保管庫のファイルです。");
+
+        using var key = UnwrapVaultKey(doc.Header, password)
+            ?? throw new VaultException(VaultErrorKind.WrongPassword, "そのファイルを保存したときのマスターパスワードと違います。");
+        var changed = MergeEntries(doc.Header, key, doc.Entries, reseal: true);
+        if (changed) IsDirty = true;
+        return changed;
+    }
+
+    /// <summary>
+    /// エントリを取り込む。すべて認証してから反映する（1 つでも失敗したら何も反映しない）。
+    /// <paramref name="reseal"/> なら、今の保管庫鍵で暗号化し直してから取り込む（別の鍵のファイルから）。
+    /// </summary>
+    private bool MergeEntries(VaultHeader header, Key key, IEnumerable<EncryptedEntry> records, bool reseal)
+    {
+        var incoming = records.Select(r => (Record: r, Data: DecryptEntry(header, key, r))).ToList();
 
         var changed = false;
 
-        foreach (var (theirs, theirData) in incoming)
+        foreach (var (original, theirData) in incoming)
         {
-            if (!_records.TryGetValue(theirs.Id, out var mine))
+            if (!_records.TryGetValue(original.Id, out var mine))
             {
-                Accept(theirs, theirData);
+                Accept(reseal ? Reseal(original, original.Deleted ? null : theirData) : original, theirData);
                 changed = true;
                 continue;
             }
-            if (SameRecord(mine, theirs)) continue;
+            // 暗号化し直すと暗号文は毎回変わるので、別の鍵のものは中身で同じかを比べる
+            if (reseal ? SameContent(mine, original, theirData) : SameRecord(mine, original)) continue;
+            var theirs = reseal ? Reseal(original, original.Deleted ? null : theirData) : original;
 
             var conflict = mine.Revision == theirs.Revision;
             if (CompareRecords(theirs, mine) > 0)
@@ -516,6 +557,11 @@ public sealed class Vault : IDisposable
         return c;
     }
 
+    private bool SameContent(EncryptedEntry mine, EncryptedEntry theirs, EntryData theirData) =>
+        mine.Revision == theirs.Revision && mine.UpdatedAt == theirs.UpdatedAt && mine.Deleted == theirs.Deleted
+        && (mine.Deleted || JsonSerializer.SerializeToUtf8Bytes(_plain[mine.Id], EntryJsonContext.Default.EntryData).AsSpan()
+            .SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(theirData, EntryJsonContext.Default.EntryData)));
+
     private static bool SameRecord(EncryptedEntry a, EncryptedEntry b) =>
         a.Revision == b.Revision && a.UpdatedAt == b.UpdatedAt && a.Deleted == b.Deleted
         && a.Box.Nonce.AsSpan().SequenceEqual(b.Box.Nonce) && a.Box.Ciphertext.AsSpan().SequenceEqual(b.Box.Ciphertext);
@@ -529,19 +575,80 @@ public sealed class Vault : IDisposable
         VaultFileCodec.Serialize(new VaultDocument(_header, _records.Values.OrderBy(r => r.Id).ToList()));
 
     /// <summary>
-    /// マスターパスワードや KDF パラメータを変える（FR-10, FR-13）。
-    /// 保管庫鍵を新しい KEK で包み直すだけで、エントリ本体は再暗号化しない。ソルトは毎回作り直す。
+    /// マスターパスワードや KDF パラメータを変える（FR-10, FR-13）。ソルトは毎回作り直す。
+    /// 保管庫鍵も新しく作り、全エントリを暗号化し直す（v0.9.4〜）。包み直すだけだと、古い（漏れた）パスワードと
+    /// 古いファイル（クラウドの版の履歴・.bak）を持つ人が保管庫鍵を取り出せ、変更後に保存した内容まで読めてしまうため（敵対検証で確認）。
     /// </summary>
-    public void ChangeMasterPassword(string currentPassword, string newPassword, int? memoryKiB = null, int? iterations = null)
+    public void ChangeMasterPassword(string currentPassword, string newPassword, int? memoryKiB = null, int? iterations = null) =>
+        ApplyKeyChange(PrepareKeyChange(currentPassword, newPassword, memoryKiB, iterations));
+
+    /// <summary>
+    /// <see cref="ChangeMasterPassword"/> の前半（時間のかかる KDF と、新しい保管庫鍵の包み）。
+    /// エントリには触れないので、画面を止めないよう別のスレッドで呼んでよい。続けて UI と同じスレッドで <see cref="ApplyKeyChange"/> を呼ぶ。
+    /// </summary>
+    public KeyChange PrepareKeyChange(string currentPassword, string newPassword, int? memoryKiB = null, int? iterations = null)
     {
         EnsureUnlocked();
+        var header = _header;
         if (!VerifyPassword(currentPassword))
             throw new VaultException(VaultErrorKind.WrongPassword, "現在のマスターパスワードが違います。");
 
-        var kdf = KdfParameters.CreateNew(memoryKiB ?? _header.Kdf.MemoryKiB, iterations ?? _header.Kdf.Iterations);
-        _header = WrapVaultKey(_header.VaultId, _header.FormatVersion, kdf, newPassword, _vaultKey!);
+        var kdf = KdfParameters.CreateNew(memoryKiB ?? header.Kdf.MemoryKiB, iterations ?? header.Kdf.Iterations);
+        var newKey = KeyHierarchy.CreateVaultKey();
+        try
+        {
+            return new KeyChange(WrapVaultKey(header.VaultId, header.FormatVersion, kdf, newPassword, newKey), newKey);
+        }
+        catch
+        {
+            newKey.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 新しい保管庫鍵に切り替え、全エントリ（墓標も）を新しい鍵で暗号化し直す。リビジョン・更新日時は変えない。
+    /// 古い鍵は次の保存が終わるまでだけ持っておき、その間にファイル側（古い鍵のまま）から取り込んだ分も新しい鍵で暗号化し直す。
+    /// </summary>
+    public void ApplyKeyChange(KeyChange change)
+    {
+        EnsureUnlocked();
+        var newKey = change.Take();
+        // 保存前に 2 回変えたときは、ファイルにあるのは最初の鍵のままなので、そちらを残す
+        if (_previousKey is null) _previousKey = _vaultKey;
+        else _vaultKey!.Dispose();
+        _vaultKey = newKey;
+        _header = change.Header;
+
+        foreach (var record in _records.Values.ToList())
+            _records[record.Id] = Reseal(record, record.Deleted ? null : _plain[record.Id]);
         IsDirty = true;
     }
+
+    /// <summary>エントリを今の保管庫鍵で暗号化し直す（ID・リビジョン・更新日時・削除フラグはそのまま）。</summary>
+    private EncryptedEntry Reseal(EncryptedEntry record, EntryData? data)
+    {
+        var json = data is null ? [] : JsonSerializer.SerializeToUtf8Bytes(data, EntryJsonContext.Default.EntryData);
+        try
+        {
+            var aad = VaultHeader.BuildEntryAad(_header.FormatVersion, _header.VaultId, record.Id, record.Revision, record.UpdatedAt, record.Deleted);
+            return new EncryptedEntry
+            {
+                Id = record.Id,
+                Revision = record.Revision,
+                UpdatedAt = record.UpdatedAt,
+                Deleted = record.Deleted,
+                Box = AeadBox.Seal(_vaultKey!, aad, json),
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(json);
+        }
+    }
+
+    // 鍵を作り直してから次の保存が終わるまでの、古い保管庫鍵（ファイル側のエントリを読むためだけに使う）
+    private Key? _previousKey;
 
     /// <summary>フェーズ2用: 同期サーバーへの認証キーを導出する。KEK とは別経路なので暗号化鍵は逆算できない。</summary>
     public SecretBuffer DeriveAuthKey(string masterPassword)
@@ -578,6 +685,8 @@ public sealed class Vault : IDisposable
     {
         _vaultKey?.Dispose();
         _vaultKey = null;
+        _previousKey?.Dispose();
+        _previousKey = null;
         _plain.Clear();
         _records.Clear();
     }
@@ -683,5 +792,35 @@ public sealed class Vault : IDisposable
             // 例外メッセージに平文が混ざらないよう、元の例外は内側に含めない（SR-11）
             throw new VaultException(VaultErrorKind.InvalidFormat, "エントリの中身を読み取れませんでした。");
         }
+    }
+}
+
+/// <summary>
+/// マスターパスワード変更の準備（新しいヘッダと、新しい保管庫鍵）。<see cref="Vault.ApplyKeyChange"/> に渡す。
+/// 渡さずに終わるときは Dispose で鍵を捨てる。
+/// </summary>
+public sealed class KeyChange : IDisposable
+{
+    private Key? _key;
+
+    internal KeyChange(VaultHeader header, Key key)
+    {
+        Header = header;
+        _key = key;
+    }
+
+    internal VaultHeader Header { get; }
+
+    internal Key Take()
+    {
+        var key = _key ?? throw new InvalidOperationException("この変更は使用済みです。");
+        _key = null;
+        return key;
+    }
+
+    public void Dispose()
+    {
+        _key?.Dispose();
+        _key = null;
     }
 }

@@ -144,11 +144,70 @@ public class SyncTests
         using var reopened = Vault.Open(path, newPassword); // PC1 の変更はそのまま
         Assert.Empty(reopened.GetEntries());
 
-        // PC2 の未保存の変更は、退避したコピーを新しいパスワードで開いた保管庫が取り込める（エントリだけ）
-        pc2.SaveCopyTo(dir.File("vault (保存できなかった変更 2026-09-30 120000).pwv"));
-        Assert.Single(reopened.MergeConflictCopies());
+        // PC2 の未保存の変更を退避したコピーは古い保管庫鍵のままなので、自動では取り込めない（v0.9.4〜。鍵を作り直すため）
+        var rescue = dir.File("vault (保存できなかった変更 2026-09-30 120000).pwv");
+        pc2.SaveCopyTo(rescue);
+        Assert.Empty(reopened.MergeConflictCopies());
+        Assert.Empty(reopened.GetEntries());
+
+        // 退避したときの（古い）マスターパスワードを入れれば、エントリだけを新しい鍵で取り込める
+        Assert.Equal(VaultErrorKind.WrongPassword,
+            Assert.Throws<VaultException>(() => reopened.MergeCopyWithPassword(rescue, newPassword)).Kind);
+        Assert.True(reopened.MergeCopyWithPassword(rescue, Password));
+        Assert.False(reopened.MergeCopyWithPassword(rescue, Password)); // 2 回目は何も変わらない
         Assert.Equal(["PC2 で追加"], Titles(reopened));
+        reopened.Save(3);
         Assert.True(reopened.VerifyPassword(newPassword));
+        using (var check = Vault.Open(path, newPassword))
+            Assert.Equal(["PC2 で追加"], Titles(check));
+    }
+
+    [Fact]
+    public void KeyRotation_BeforeSave_StillMergesWhatOtherDeviceWroteWithOldKey()
+    {
+        using var dir = new TempDir();
+        var path = dir.File("vault.pwv");
+        const string newPassword = "a brand new master password";
+        using var pc1 = Vault.Create(path, Password, TestKdf.Fast());
+        pc1.AddEntry(Entry("共通"));
+        pc1.Save(3);
+        using var pc2 = Vault.Open(path, Password);
+
+        // PC1 が鍵を作り直した（まだ保存していない）間に、PC2 が古い鍵で書いた
+        pc1.ChangeMasterPassword(Password, newPassword);
+        pc1.ChangeMasterPassword(newPassword, newPassword); // 保存前に 2 回変えても、ファイル側の古い鍵は覚えている
+        pc2.AddEntry(Entry("PC2 で追加"));
+        pc2.Save(3);
+
+        pc1.Save(3); // 保存の直前に PC2 の分を古い鍵で読み、新しい鍵で暗号化し直して書く
+        using (var check = Vault.Open(path, newPassword))
+            Assert.Equal(["PC2 で追加", "共通"], Titles(check));
+        Assert.Equal(VaultErrorKind.WrongPassword, Assert.Throws<VaultException>(() => Vault.Open(path, Password)).Kind);
+
+        // PC2 は新しいヘッダに気づいてロックする（古い鍵で上書きしない）
+        Assert.Equal(VaultErrorKind.HeaderChanged, Assert.Throws<VaultException>(() => pc2.SyncFromDisk()).Kind);
+    }
+
+    [Fact]
+    public void MergeCopyWithPassword_RejectsOtherVault_AndTamperedEntries()
+    {
+        using var dir = new TempDir();
+        using var vault = Vault.Create(dir.File("vault.pwv"), Password, TestKdf.Fast());
+        using (var other = Vault.Create(dir.File("other.pwv"), Password, TestKdf.Fast()))
+            other.AddEntry(Entry("別の保管庫"));
+        Assert.Equal(VaultErrorKind.DifferentVault,
+            Assert.Throws<VaultException>(() => vault.MergeCopyWithPassword(dir.File("other.pwv"), Password)).Kind);
+
+        // 中身を書き換えたコピーは、1 件でも認証に失敗したら何も取り込まない
+        var copy = dir.File("vault (1).pwv");
+        vault.AddEntry(Entry("a"));
+        vault.SaveCopyTo(copy);
+        var doc = VaultFileCodec.Deserialize(File.ReadAllBytes(copy));
+        var e = doc.Entries[0];
+        File.WriteAllBytes(copy, VaultFileCodec.Serialize(doc.WithEntries([e.With(revision: e.Revision + 5)])));
+        using var fresh = Vault.Open(dir.File("vault.pwv"), Password);
+        Assert.Equal(VaultErrorKind.Tampered, Assert.Throws<VaultException>(() => fresh.MergeCopyWithPassword(copy, Password)).Kind);
+        Assert.Empty(fresh.GetEntries());
     }
 
     [Fact]
@@ -172,8 +231,8 @@ public class SyncTests
         Assert.Equal(VaultErrorKind.HeaderChanged, Assert.Throws<VaultException>(() => vault.SyncFromDisk()).Kind);
         vault.AddEntry(Entry("new account", "secret-2"));
         Assert.Throws<VaultException>(() => vault.Save(3));
-        using var attacker = Vault.Open(path, leaked);
-        Assert.DoesNotContain(attacker.GetEntries(), e => e.Data.Title == "new account");
+        // 変更後のエントリは新しい保管庫鍵で暗号化されているので、漏れたパスワードではそもそも開けない（v0.9.4〜）
+        Assert.Equal(VaultErrorKind.Tampered, Assert.Throws<VaultException>(() => Vault.Open(path, leaked)).Kind);
     }
 
     [Fact]

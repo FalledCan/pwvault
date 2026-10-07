@@ -67,6 +67,8 @@ public partial class VaultViewModel : ViewModelBase
 
         // 同期フォルダで他の端末と共有しているとき、その変更を取り込む（アンロック直後と、一定間隔ごと）
         SyncNow();
+        if (PendingRescues().Count > 0)
+            Status = "前のマスターパスワードで保存された「保存できなかった変更」があります。設定の「保存先と同期」で取り込めます。";
         _syncTimer = new DispatcherTimer { Interval = main.VaultSyncInterval };
         _syncTimer.Tick += (_, _) => SyncNow();
         _syncTimer.Start();
@@ -360,12 +362,27 @@ public partial class VaultViewModel : ViewModelBase
             try
             {
                 vault.SaveCopyTo(rescue);
-                Main.AddLockNotice($"保存できなかった変更を、次のファイルに退避しました（暗号化済み）:\n{rescue}\n同じ保管庫なら、次にアンロックしたときに自動で取り込みます。");
+                Main.Rescues.Add(rescue);
+                Main.AddLockNotice($"保存できなかった変更を、次のファイルに退避しました（暗号化済み）:\n{rescue}\n同じ保管庫なら、次にアンロックしたときに自動で取り込みます（マスターパスワードが変わっていたときは、設定の「保存先と同期」で取り込めます）。");
                 return;
             }
             catch (VaultException) { }
         }
         Main.AddLockNotice("保存できなかった変更があり、退避もできませんでした。");
+    }
+
+    /// <summary>
+    /// この PC が退避した「保存できなかった変更」のうち、この保管庫のもので、自動では取り込めずに残っているもの
+    /// （退避した後にマスターパスワードが変わり、保管庫鍵が新しくなった）。前のマスターパスワードを入れれば取り込める。
+    /// </summary>
+    public IReadOnlyList<string> PendingRescues()
+    {
+        if (_vault is not { IsLocked: false } vault) return [];
+        return Main.Rescues.Pending().Where(path =>
+        {
+            try { return Core.Format.VaultFileCodec.Deserialize(File.ReadAllBytes(path)).Header.VaultId == vault.VaultId; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VaultException) { return false; }
+        }).ToList();
     }
 
     // ------------------------------------------------------------------ 他の端末との同期（同期フォルダ）

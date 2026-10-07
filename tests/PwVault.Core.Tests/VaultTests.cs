@@ -204,16 +204,21 @@ public class VaultTests
     }
 
     [Fact]
-    public void ChangeMasterPassword_RewrapsOnlyTheVaultKey()
+    public void ChangeMasterPassword_RotatesVaultKey_AndKeepsEveryEntry()
     {
         using var dir = new TempDir();
         var path = dir.File("vault.pwv");
-        byte[] ciphertextBefore;
+        EncryptedEntry[] before;
+        Guid trashed, purged;
         using (var vault = Vault.Create(path, Password, TestKdf.Fast()))
         {
             vault.AddEntry(Sample());
+            trashed = vault.AddEntry(Sample("ゴミ箱"));
+            vault.MoveToTrash(trashed);
+            purged = vault.AddEntry(Sample("完全削除"));
+            vault.Purge(purged);
             vault.Save(3);
-            ciphertextBefore = VaultFileCodec.Deserialize(File.ReadAllBytes(path)).Entries[0].Box.Ciphertext;
+            before = [.. VaultFileCodec.Deserialize(File.ReadAllBytes(path)).Entries];
 
             Assert.Throws<VaultException>(() => vault.ChangeMasterPassword("wrong", "new password 123"));
             vault.ChangeMasterPassword(Password, "new password 123");
@@ -224,10 +229,46 @@ public class VaultTests
         Assert.Equal(VaultErrorKind.WrongPassword, ex.Kind);
 
         using var reopened = Vault.Open(path, "new password 123");
-        Assert.Equal("s3cret!", reopened.GetEntries()[0].Data.Password);
+        Assert.Equal("s3cret!", reopened.GetEntries().Single(e => e.Data.Title == "Example").Data.Password);
+        Assert.True(reopened.GetEntry(trashed)!.Data.IsTrashed);
+        Assert.Null(reopened.GetEntry(purged));
 
-        var after = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
-        Assert.Equal(ciphertextBefore, after.Entries[0].Box.Ciphertext);
+        // 保管庫鍵が新しくなったので、全エントリ（墓標も）の暗号文が変わる。リビジョン・更新日時・削除フラグはそのまま
+        var after = VaultFileCodec.Deserialize(File.ReadAllBytes(path)).Entries.ToDictionary(e => e.Id);
+        Assert.Equal(before.Length, after.Count);
+        foreach (var b in before)
+        {
+            var a = after[b.Id];
+            Assert.NotEqual(b.Box.Ciphertext, a.Box.Ciphertext);
+            Assert.Equal((b.Revision, b.UpdatedAt, b.Deleted), (a.Revision, a.UpdatedAt, a.Deleted));
+        }
+    }
+
+    [Fact]
+    public void Attack_LeakedOldPassword_CannotReadEntriesSavedAfterChange()
+    {
+        // 漏れたのでマスターパスワードを変えた。攻撃者は漏れたパスワードと古いファイル（クラウドの版の履歴・.bak）を持っている
+        using var dir = new TempDir();
+        var path = dir.File("vault.pwv");
+        const string leaked = "old password that leaked!!", fresh = "brand new strong password";
+        using (var vault = Vault.Create(path, leaked, TestKdf.Fast()))
+        {
+            vault.AddEntry(Sample("before"));
+            vault.Save(3);
+        }
+        var oldFile = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
+        using (var vault = Vault.Open(path, leaked))
+        {
+            vault.ChangeMasterPassword(leaked, fresh);
+            vault.AddEntry(Sample("after", "secret-after-change"));
+            vault.Save(3);
+        }
+
+        // 新しいファイルのエントリに、古いヘッダ（漏れたパスワードで保管庫鍵を取り出せる）を付けても読めない
+        var newFile = VaultFileCodec.Deserialize(File.ReadAllBytes(path));
+        var forged = dir.File("forged.pwv");
+        File.WriteAllBytes(forged, VaultFileCodec.Serialize(newFile with { Header = oldFile.Header }));
+        Assert.Equal(VaultErrorKind.Tampered, Assert.Throws<VaultException>(() => Vault.Open(forged, leaked)).Kind);
     }
 
     [Fact]

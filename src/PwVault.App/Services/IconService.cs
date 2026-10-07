@@ -119,6 +119,9 @@ public sealed class IconService : IDisposable
         IconChanged?.Invoke(host);
     }
 
+    /// <summary>キャッシュを今の保管庫鍵で保存し直す（マスターパスワードの変更で保管庫鍵が新しくなったとき）。</summary>
+    public void SaveSoon() => ScheduleSave();
+
     /// <summary>連続して届くことが多いので、少しまとめてから保存する。</summary>
     private void ScheduleSave()
     {

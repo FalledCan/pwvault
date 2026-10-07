@@ -285,10 +285,75 @@ public class StorageSyncTests
         Assert.NotNull(unlock.Error);
         Assert.Contains("マスターパスワード（または鍵の設定）が変更された", unlock.Notice);
 
-        // 新しいパスワードで開き直すと、退避した変更も取り込まれる
+        // 新しいパスワードで開き直す。退避した変更は前の保管庫鍵のままなので自動では取り込めず、案内を出す（v0.9.4〜）
+        var rescue = Assert.Single(Directory.GetFiles(h.Dir, "vault (保存できなかった変更 *).pwv"));
+        // 同期フォルダに置かれただけのファイル（この PC が作っていない）は、パスワードを求める対象にしない
+        var planted = Path.Combine(h.Dir, "vault (置かれたファイル).pwv");
+        File.Copy(rescue, planted);
         unlock.Password = newPassword;
         await unlock.UnlockCommand.ExecuteAsync(null);
-        Assert.Equal(["この PC で追加（未保存）", "共通"], Titles(h.Page<VaultViewModel>()));
+        vm = h.Page<VaultViewModel>();
+        Assert.Equal(["共通"], Titles(vm));
+        Assert.Contains("前のマスターパスワードで保存された", vm.Status);
+
+        vm.ShowSettingsAt(SettingsCategory.Storage);
+        var settings = Assert.IsType<SettingsViewModel>(vm.SubPage);
+        Assert.Equal([rescue], settings.RescueFiles);
+        h.Window.Height = 900;
+        h.Screenshot("27-settings-rescue");
+        h.Window.Height = 720;
+
+        // 違うパスワードでは取り込まない。退避したとき（変更前）のパスワードで取り込み、ファイルを消す
+        settings.RescuePassword = newPassword;
+        settings.ImportRescuesCommand.Execute(null);
+        Assert.Contains("違います", settings.RescueStatus);
+        Assert.Equal(["共通"], Titles(vm));
+        settings.RescuePassword = Master;
+        settings.ImportRescuesCommand.Execute(null);
+        Assert.Contains("取り込みました", settings.RescueStatus);
+        Assert.Empty(settings.RescueFiles);
+        Assert.False(settings.HasRescueFiles);
+        Assert.False(File.Exists(rescue));
+        Assert.True(File.Exists(planted));
+        Assert.Equal(["この PC で追加（未保存）", "共通"], Titles(vm));
+        using (var check = Vault.Open(h.VaultPath, newPassword))
+            Assert.Equal(2, check.GetEntries().Count);
+    }
+
+    [AvaloniaFact]
+    public async Task ChangeMasterPassword_InSettings_RotatesKey_AndKeepsIconCache()
+    {
+        using var h = new Harness();
+        const string newPassword = "a brand new master password";
+        var vm = await UnlockNew(h, h.VaultPath, "共通");
+        var before = Core.Format.VaultFileCodec.Deserialize(File.ReadAllBytes(h.VaultPath)).Entries[0].Box.Ciphertext;
+        vm.Icons.StoreFromBrowser("example.com", TestIcon());
+        await Harness.WaitFor(() => File.Exists(Core.Icons.IconCache.PathFor(h.VaultPath)));
+
+        vm.ShowSettingsAt(SettingsCategory.Security);
+        var settings = Assert.IsType<SettingsViewModel>(vm.SubPage);
+        settings.CurrentPassword = Master;
+        settings.NewPassword = settings.ConfirmNewPassword = newPassword;
+        await settings.ChangePasswordCommand.ExecuteAsync(null);
+        Assert.Contains("変更しました", settings.PasswordStatus);
+
+        var after = Core.Format.VaultFileCodec.Deserialize(File.ReadAllBytes(h.VaultPath)).Entries[0].Box.Ciphertext;
+        Assert.NotEqual(before, after); // 保管庫鍵を作り直した
+        using (var check = Vault.Open(h.VaultPath, newPassword))
+        {
+            Assert.Equal("共通", check.GetEntries().Single().Data.Title);
+            // アイコンのキャッシュも新しい鍵で保存し直す（古い鍵のままだと次に開けない）
+            await Harness.WaitFor(() => Core.Icons.IconCache.Load(check, Core.Icons.IconCache.PathFor(h.VaultPath)).Get("example.com") is not null);
+        }
+    }
+
+    /// <summary>16×16 の PNG。</summary>
+    private static byte[] TestIcon()
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(16, 16);
+        bitmap.Erase(SkiaSharp.SKColors.Red);
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
     }
 
     [AvaloniaFact]

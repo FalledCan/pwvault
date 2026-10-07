@@ -168,6 +168,66 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(NextcloudText));
         OnPropertyChanged(nameof(CanMoveToGoogleDrive));
         OnPropertyChanged(nameof(CanMoveToNextcloud));
+        RescueFiles = _owner.PendingRescues();
+    }
+
+    // ---- 前のマスターパスワードで保存された「保存できなかった変更」
+
+    /// <summary>この PC が退避した変更のうち、マスターパスワードが変わって自動では取り込めなかったもの。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRescueFiles), nameof(RescueFilesText))]
+    public partial IReadOnlyList<string> RescueFiles { get; set; } = [];
+
+    public bool HasRescueFiles => RescueFiles.Count > 0;
+    public string RescueFilesText => string.Join(Environment.NewLine, RescueFiles.Select(Path.GetFileName));
+
+    [ObservableProperty] public partial string RescuePassword { get; set; } = "";
+    [ObservableProperty] public partial string? RescueStatus { get; set; }
+
+    /// <summary>退避したときのマスターパスワードで開いて取り込み、取り込めたファイルは消す。</summary>
+    [RelayCommand]
+    private void ImportRescues()
+    {
+        var password = RescuePassword;
+        RescuePassword = "";
+        if (password.Length == 0) { RescueStatus = "退避したときのマスターパスワードを入れてください。"; return; }
+
+        var imported = new List<string>();
+        string? error = null;
+        foreach (var path in RescueFiles)
+        {
+            try
+            {
+                _owner.Vault.MergeCopyWithPassword(path, password);
+                imported.Add(path);
+            }
+            catch (VaultException ex)
+            {
+                error = ex.Kind == VaultErrorKind.WrongPassword
+                    ? "マスターパスワードが違います。退避したとき（変更する前）のマスターパスワードを入れてください。"
+                    : $"{Path.GetFileName(path)}: {ex.Message}";
+            }
+        }
+
+        if (imported.Count > 0)
+        {
+            if (!_owner.Persist())
+            {
+                RescueStatus = _owner.Status;
+                return;
+            }
+            foreach (var path in imported)
+            {
+                try { File.Delete(path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                _owner.Main.Rescues.Remove(path);
+            }
+            _owner.Refresh();
+        }
+        RescueFiles = _owner.PendingRescues();
+        RescueStatus = imported.Count > 0
+            ? $"{imported.Count} 件のファイルの変更を取り込みました。" + (error is null ? "" : "\n" + error)
+            : error;
     }
 
     [RelayCommand]
@@ -329,7 +389,21 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// マスターパスワードや KDF を変えると保管庫鍵の包み直しで Windows Hello の登録は使えなくなる。
+    /// マスターパスワード・KDF を変え、保管庫鍵も作り直す。時間のかかる KDF は別スレッドで、
+    /// エントリの暗号化し直しは（同期の取り込みと重ならないよう）UI スレッドで行う。
+    /// アイコンのキャッシュも保管庫鍵で暗号化しているので、新しい鍵で保存し直す。
+    /// </summary>
+    private async Task ChangeKeyAsync(string current, string next, int? memoryKiB = null, int? iterations = null)
+    {
+        var vault = _owner.Vault;
+        using var change = await Task.Run(() => vault.PrepareKeyChange(current, next, memoryKiB, iterations));
+        if (vault.IsLocked) throw new VaultException(VaultErrorKind.Io, "変更中にロックされたため、変更しませんでした。");
+        vault.ApplyKeyChange(change);
+        _owner.Icons.SaveSoon();
+    }
+
+    /// <summary>
+    /// マスターパスワードや KDF を変えると保管庫鍵が新しくなり、Windows Hello の登録は使えなくなる。
     /// 残っていても使えないので消し、再登録を案内する。
     /// </summary>
     private async Task<string> ClearQuickUnlockAfterRewrapAsync()
@@ -451,7 +525,7 @@ public partial class SettingsViewModel : ViewModelBase
         var password = KdfPassword;
         try
         {
-            await Task.Run(() => _owner.Vault.ChangeMasterPassword(password, password, memKiB, iterations));
+            await ChangeKeyAsync(password, password, memKiB, iterations);
             KdfPassword = "";
             KdfStatus = _owner.Persist() ? "KDF パラメータを更新しました。" + await ClearQuickUnlockAfterRewrapAsync() : _owner.Status;
             UpdateKdfCurrent();
@@ -480,7 +554,7 @@ public partial class SettingsViewModel : ViewModelBase
         var (current, next) = (CurrentPassword, NewPassword);
         try
         {
-            await Task.Run(() => _owner.Vault.ChangeMasterPassword(current, next));
+            await ChangeKeyAsync(current, next);
             CurrentPassword = NewPassword = ConfirmNewPassword = "";
             PasswordStatus = _owner.Persist()
                 ? "マスターパスワードを変更しました。緊急キットの記入内容も更新してください。" + await ClearQuickUnlockAfterRewrapAsync()
