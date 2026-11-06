@@ -124,7 +124,8 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// ショートカットキーが押された。押した瞬間に前面だった画面を入力先として覚え、選択窓を出す。
-    /// ロック中なら PwVault を前に出してアンロックを促す（アンロック後にもう一度押してもらう）。
+    /// ロック中なら PwVault を前に出してアンロックを促し、入力先を覚えておく。
+    /// アンロックしたらメイン画面を隠して、その入力先への選択窓を出す（<see cref="OnUnlocked"/>）。
     /// </summary>
     public void OnAutoTypeHotKey()
     {
@@ -133,12 +134,35 @@ public partial class MainViewModel : ViewModelBase
         if (CurrentPage is not VaultViewModel { IsUnlocked: true } vault)
         {
             if (CurrentPage is UnlockViewModel unlock)
-                unlock.Info = $"自動入力するには、アンロックしてから {target.ProcessName} の画面でもう一度ショートカットキーを押してください。";
+            {
+                _pendingAutoType = (target, Clock.GetUtcNow());
+                unlock.Info = $"アンロックすると、{target.ProcessName} への自動入力の候補を出します。";
+            }
             ShowRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
         AutoLock.NotifyActivity();
         AutoTypePicker = new AutoTypePickerViewModel(this, vault, AutoTypePlatform, target);
+    }
+
+    // ロック中にショートカットキーが押されたときの入力先（アンロックしたら選択窓を出す）と、押された時刻
+    private (TargetWindow Target, DateTimeOffset At)? _pendingAutoType;
+
+    /// <summary>ロック中に押されたショートカットキーを、アンロックのあと何分まで覚えておくか。</summary>
+    public static readonly TimeSpan PendingAutoTypeLifetime = TimeSpan.FromMinutes(3);
+
+    /// <summary>メイン画面を隠す（ロック中のショートカットキーからアンロックし、自動入力の選択窓に切り替えるとき）。</summary>
+    public event EventHandler? HideRequested;
+
+    /// <summary>ロック中に押されたショートカットキーの入力先があれば、メイン画面を隠してその選択窓を出す。</summary>
+    private void ResumePendingAutoType(VaultViewModel vault)
+    {
+        if (_pendingAutoType is not { } pending) return;
+        _pendingAutoType = null;
+        // 押してから時間がたっていたら、もう別のことをしているかもしれないので出さない
+        if (AutoTypePlatform is null || !Settings.AutoTypeEnabled || Clock.GetUtcNow() - pending.At > PendingAutoTypeLifetime) return;
+        HideRequested?.Invoke(this, EventArgs.Empty);
+        AutoTypePicker = new AutoTypePickerViewModel(this, vault, AutoTypePlatform, pending.Target);
     }
 
     public void CloseAutoTypePicker() => AutoTypePicker = null;
@@ -567,7 +591,9 @@ public partial class MainViewModel : ViewModelBase
         SaveSettings();
         AutoLock.NotifyActivity();
         AutoLock.IsArmed = true;
-        CurrentPage = new VaultViewModel(this, vault);
+        var page = new VaultViewModel(this, vault);
+        CurrentPage = page;
+        ResumePendingAutoType(page);
     }
 
     public bool IsUnlocked => CurrentPage is VaultViewModel;

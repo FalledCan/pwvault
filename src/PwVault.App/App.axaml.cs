@@ -80,6 +80,8 @@ public partial class App : Application
 
             // ブラウザ拡張の「PwVault をアンロックする」から呼ばれたら前に出す
             main.ShowRequested += (_, _) => ShowWindow(window);
+            // ロック中に自動入力のショートカットキーを押してアンロックしたら、メイン画面は隠して選択窓だけにする（通知領域から開ける）
+            main.HideRequested += (_, _) => window.Hide();
 
             // 更新: 前回の入れ替えで残った古い exe を消し、定期的な確認を始める。入れ替えたら終了して新しい exe に任せる
             UpdateService.CleanupAfterUpdate(MainViewModel.ExePath);

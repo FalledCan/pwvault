@@ -341,19 +341,71 @@ public class AutoTypeTests
     }
 
     [AvaloniaFact]
-    public async Task WhenLocked_AsksToUnlockInsteadOfShowingPicker()
+    public async Task WhenLocked_UnlockThenHidesMainWindowAndShowsPickerForThatApp()
     {
         using var h = new Harness();
         await Unlock(h, Ff14());
         Enable(h);
         h.Main.Lock();
+        var hidden = 0;
+        var shown = 0;
+        h.Main.HideRequested += (_, _) => hidden++;
+        h.Main.ShowRequested += (_, _) => shown++;
 
+        // ロック中に押すと、選択窓は出さずにアンロック画面を前に出す（何も打たない）
         h.AutoType.Foreground = Game;
         h.AutoType.PressHotKey!();
         Harness.Pump();
         Assert.Null(h.Main.AutoTypePicker);
-        Assert.Contains("アンロックしてから", h.Page<UnlockViewModel>().Info);
+        Assert.Equal(1, shown);
+        var unlock = h.Page<UnlockViewModel>();
+        Assert.Contains("ffxivboot.exe への自動入力の候補を出します", unlock.Info);
         Assert.Empty(h.AutoType.Typed);
+
+        // アンロックしたら、メイン画面を隠して、押したときの画面への選択窓を出す
+        h.AutoType.Foreground = null; // アンロック中は PwVault が前面
+        unlock.Password = Master;
+        await unlock.UnlockCommand.ExecuteAsync(null);
+        Assert.Equal(1, hidden);
+        var picker = Assert.IsType<AutoTypePickerViewModel>(h.Main.AutoTypePicker);
+        Assert.Equal(Game, picker.Target);
+        Assert.Equal("FF14", picker.SelectedItem!.Title);
+
+        h.AutoType.Foreground = Game; // 入力先を前に戻す
+        await picker.ChooseCommand.ExecuteAsync(null);
+        Assert.Equal(["hikari", "<TAB>", "crystal-p@ss"], h.AutoType.Typed);
+
+        // 一度出したら忘れる（次に普通にアンロックしても出さない）
+        h.Main.Lock();
+        var again = h.Page<UnlockViewModel>();
+        again.Password = Master;
+        await again.UnlockCommand.ExecuteAsync(null);
+        Assert.Null(h.Main.AutoTypePicker);
+        Assert.Equal(1, hidden);
+    }
+
+    [AvaloniaFact]
+    public async Task WhenLocked_UnlockMuchLater_DoesNotPopUpPicker()
+    {
+        using var h = new Harness();
+        await Unlock(h, Ff14());
+        Enable(h);
+        h.Main.Lock();
+        var hidden = 0;
+        h.Main.HideRequested += (_, _) => hidden++;
+
+        h.AutoType.Foreground = Game;
+        h.AutoType.PressHotKey!();
+        Harness.Pump();
+
+        // 押してから時間がたってからのアンロックでは、もう別のことをしているかもしれないので出さない
+        h.Clock.Now += MainViewModel.PendingAutoTypeLifetime + TimeSpan.FromSeconds(1);
+        var unlock = h.Page<UnlockViewModel>();
+        unlock.Password = Master;
+        await unlock.UnlockCommand.ExecuteAsync(null);
+        Assert.IsType<VaultViewModel>(h.Main.CurrentPage);
+        Assert.Null(h.Main.AutoTypePicker);
+        Assert.Equal(0, hidden);
     }
 
     [AvaloniaFact]
